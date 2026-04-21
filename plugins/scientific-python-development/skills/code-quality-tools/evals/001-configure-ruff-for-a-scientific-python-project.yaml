@@ -1,5 +1,5 @@
 name: Configure ruff for a scientific Python project
-prompt: Set up ruff as a linter and formatter for my scientific Python project.
+prompt: Show me the pyproject.toml configuration for ruff as a linter and formatter for a scientific Python project.
 criteria:
 - Adds ruff configuration under [tool.ruff] in pyproject.toml
 - Specifies selected rule sets (e.g., E, F, I, NPY)
