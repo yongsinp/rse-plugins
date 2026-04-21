@@ -1,4 +1,4 @@
-name: Evaluate Skills
+name: Evaluate All Skills
 on: workflow_dispatch
 
 permissions:
