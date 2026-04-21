@@ -42,7 +42,40 @@ jobs:
         uses: tesslio/setup-tessl@v2
 
       - name: Review SKILL.md
-        run: tessl skill review ${{ matrix.skill }}
+        run: |
+          output=$(tessl skill review ${{ matrix.skill }} 2>&1)
+          echo "$output"
+
+          skill_name=$(basename '${{ matrix.skill }}')
+
+          # Parse overall result
+          overall=$(echo "$output" | grep -oP 'Overall: \K(PASSED|FAILED)')
+          errors=$(echo "$output" | grep -oP '\d+(?= errors)')
+          warnings=$(echo "$output" | grep -oP '\d+(?= warnings)')
+          score=$(echo "$output" | grep -oP 'Review Score: \K\d+')
+
+          # Parse judge scores
+          description=$(echo "$output" | grep -oP '(?<=Description: )\d+')
+          content=$(echo "$output" | grep -oP '(?<=Content: )\d+')
+
+          # Build summary
+          if [ "$overall" = "PASSED" ]; then
+            status="✅ PASSED"
+          else
+            status="❌ FAILED"
+          fi
+
+          {
+            echo "## Skill Review: ${skill_name}"
+            echo ""
+            echo "**${status}** | Score: ${score}% | Errors: ${errors} | Warnings: ${warnings}"
+            echo ""
+            echo "| Check | Score |"
+            echo "|-------|-------|"
+            echo "| Description | ${description}% |"
+            echo "| Content | ${content}% |"
+            echo ""
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Derive skill name
         id: skill-name
