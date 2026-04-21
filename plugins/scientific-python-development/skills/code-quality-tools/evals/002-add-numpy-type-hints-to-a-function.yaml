@@ -3,6 +3,6 @@ prompt: How do I add type hints to a Python function that takes a NumPy array an
 criteria:
 - Uses np.ndarray or npt.NDArray[np.float64] for the array parameter
 - Returns float or np.floating type hint
-- Mentions importing numpy.typing as npt for typed arrays
+- Mentions importing numpy.typing for typed arrays
 expect_skill: true
 timeout: 120
