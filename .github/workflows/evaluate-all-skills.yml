@@ -43,7 +43,7 @@ jobs:
 
       - name: Review SKILL.md
         run: |
-          output=$(tessl skill review ${{ matrix.skill }} 2>&1)
+          output=$(tessl skill review ${{ matrix.skill }} --threshold 80 2>&1)
           echo "$output"
 
           skill_name=$(basename '${{ matrix.skill }}')
