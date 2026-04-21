@@ -48,36 +48,56 @@ jobs:
 
           skill_name=$(basename '${{ matrix.skill }}')
 
-          # Parse overall result
-          overall=$(echo "$output" | grep -oP 'Overall: \K(PASSED|FAILED)')
+          # Parse validation checks result
+          validation=$(echo "$output" | grep -oP 'Overall: \K(PASSED|FAILED)')
           errors=$(echo "$output" | grep -oP '\d+(?= errors)')
           warnings=$(echo "$output" | grep -oP '\d+(?= warnings)')
-          score=$(echo "$output" | grep -oP 'Review Score: \K\d+')
 
-          # Parse judge scores
+          # Parse judge evaluation result
+          score=$(echo "$output" | grep -oP 'Review Score: \K\d+')
           description=$(echo "$output" | grep -oP '(?<=Description: )\d+')
           content=$(echo "$output" | grep -oP '(?<=Content: )\d+')
+
+          # Extract validation checks block (everything before "Judge Evaluation")
+          validation_block=$(echo "$output" | sed -n '/^Validation Checks/,/^Judge Evaluation/{ /^Judge Evaluation/d; p }')
 
           # Extract judge evaluation block (everything between "Judge Evaluation" and "Review Score")
           judge_block=$(echo "$output" | sed -n '/^Judge Evaluation/,/^Review Score/{ /^Judge Evaluation/d; /^Review Score/d; p }')
 
-          if [ "$overall" = "PASSED" ]; then
-            status="✅ PASSED"
+          if [ "$validation" = "PASSED" ]; then
+            validation_status="✅ PASSED"
           else
-            status="❌ FAILED"
+            validation_status="❌ FAILED"
+          fi
+
+          if [ -n "$score" ] && [ "$score" -ge 80 ]; then
+            judge_status="✅ PASSED"
+          else
+            judge_status="❌ FAILED"
           fi
 
           {
-            echo "## ${status} Skill Review: ${skill_name}"
+            echo "## ${validation_status} Validation Checks: ${skill_name}"
             echo ""
-            echo "**Score: ${score}%** | Errors: ${errors} | Warnings: ${warnings}"
+            echo "Errors: ${errors} | Warnings: ${warnings}"
+            echo ""
+            echo "<details><summary>Validation Checks detail</summary>"
+            echo ""
+            echo '```'
+            echo "$validation_block"
+            echo '```'
+            echo "</details>"
+            echo ""
+            echo "## ${judge_status} LLM Judge Evaluation: ${skill_name}"
+            echo ""
+            echo "**Score: ${score}%**"
             echo ""
             echo "| Check | Score |"
             echo "|-------|-------|"
             echo "| Description | ${description}% |"
             echo "| Content | ${content}% |"
             echo ""
-            echo "<details><summary>Judge Evaluation</summary>"
+            echo "<details><summary>Judge Evaluation detail</summary>"
             echo ""
             echo '```'
             echo "$judge_block"
