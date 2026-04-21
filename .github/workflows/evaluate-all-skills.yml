@@ -42,8 +42,13 @@ jobs:
         uses: tesslio/setup-tessl@v2
 
       - name: Review SKILL.md
+        continue-on-error: true
+        id: review
         run: |
+          set +e
           output=$(tessl skill review ${{ matrix.skill }} --threshold 80 2>&1)
+          review_exit=$?
+          set -e
           echo "$output"
 
           skill_name=$(basename '${{ matrix.skill }}')
@@ -106,11 +111,14 @@ jobs:
             echo ""
           } >> "$GITHUB_STEP_SUMMARY"
 
+          echo "exit-code=$review_exit" >> "$GITHUB_OUTPUT"
+
       - name: Derive skill name
         id: skill-name
         run: echo "value=$(basename '${{ matrix.skill }}')" >> "$GITHUB_OUTPUT"
 
       - name: Evaluate skill
+        id: evaluate
         if: ${{ hashFiles(format('{0}/evals', matrix.skill)) != '' }}
         uses: skill-bench/skill-eval-action@v1
         env:
@@ -120,4 +128,15 @@ jobs:
           skill-path: ${{ matrix.skill }}
           anthropic-api-key: ${{ secrets.LITELLM_API_KEY }}
           pass-threshold: '80'
-          
+
+      - name: Propagate review result
+        if: always()
+        run: |
+          review_exit=${{ steps.review.outputs.exit-code }}
+          eval_outcome="${{ steps.evaluate.outcome }}"
+          if [ "$eval_outcome" = "failure" ]; then
+            eval_exit=1
+          else
+            eval_exit=0
+          fi
+          exit $(( review_exit | eval_exit ))
