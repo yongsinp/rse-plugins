@@ -58,7 +58,9 @@ jobs:
           description=$(echo "$output" | grep -oP '(?<=Description: )\d+')
           content=$(echo "$output" | grep -oP '(?<=Content: )\d+')
 
-          # Build summary
+          # Extract judge evaluation block (everything between "Judge Evaluation" and "Review Score")
+          judge_block=$(echo "$output" | sed -n '/^Judge Evaluation/,/^Review Score/{ /^Judge Evaluation/d; /^Review Score/d; p }')
+
           if [ "$overall" = "PASSED" ]; then
             status="✅ PASSED"
           else
@@ -74,6 +76,13 @@ jobs:
             echo "|-------|-------|"
             echo "| Description | ${description}% |"
             echo "| Content | ${content}% |"
+            echo ""
+            echo "<details><summary>Judge Evaluation</summary>"
+            echo ""
+            echo '```'
+            echo "$judge_block"
+            echo '```'
+            echo "</details>"
             echo ""
           } >> "$GITHUB_STEP_SUMMARY"
 
