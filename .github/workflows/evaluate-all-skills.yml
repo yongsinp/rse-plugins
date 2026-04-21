@@ -9,23 +9,23 @@ jobs:
   discover:
     runs-on: ubuntu-latest
     outputs:
-      skills: ${{ steps.discover.outputs.skills }}
+      all-skills: ${{ steps.discover.outputs.all-skills }}
       count: ${{ steps.discover.outputs.count }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
           persist-credentials: false
 
-      - name: Discover skills with evals
+      - name: Discover all skills
         id: discover
         run: |
-          skills=$(find plugins community-plugins -name "*.yaml" -path "*/evals/*" -exec dirname {} \; | xargs -I{} dirname {} | sort -u | jq -R -s -c 'split("\n") | map(select(. != ""))')
-          echo "skills=$skills" >> "$GITHUB_OUTPUT"
-          echo "count=$(echo $skills | jq length)" >> "$GITHUB_OUTPUT"
+          all=$(find plugins community-plugins -name "SKILL.md" -exec dirname {} \; | sort -u | jq -R -s -c 'split("\n") | map(select(. != ""))')
+          echo "all-skills=$all" >> "$GITHUB_OUTPUT"
+          echo "count=$(echo $all | jq length)" >> "$GITHUB_OUTPUT"
 
       - name: Summary
-        run: echo "Found ${{ steps.discover.outputs.count }} skills with evals"
-        
+        run: echo "Found ${{ steps.discover.outputs.count }} skills"
+
   evaluate:
     needs: discover
     if: needs.discover.outputs.count > 0
@@ -34,21 +34,22 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        skill: ${{ fromJSON(needs.discover.outputs.skills) }}
+        skill: ${{ fromJSON(needs.discover.outputs.all-skills) }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
       - name: Install Tessl
         uses: tesslio/setup-tessl@v2
-        
-      - name: Review SKILLS.md
+
+      - name: Review SKILL.md
         run: tessl skill review ${{ matrix.skill }}
 
       - name: Derive skill name
         id: skill-name
         run: echo "value=$(basename '${{ matrix.skill }}')" >> "$GITHUB_OUTPUT"
 
-      - name: Evaluate skills
+      - name: Evaluate skill
+        if: ${{ hashFiles(format('{0}/evals', matrix.skill)) != '' }}
         uses: skill-bench/skill-eval-action@v1
         env:
           ANTHROPIC_BASE_URL: ${{ secrets.LITELLM_PROXY_URL }}
