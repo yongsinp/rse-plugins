@@ -68,9 +68,9 @@ jobs:
           fi
 
           {
-            echo "## Skill Review: ${skill_name}"
+            echo "## ${status} Skill Review: ${skill_name}"
             echo ""
-            echo "**${status}** | Score: ${score}% | Errors: ${errors} | Warnings: ${warnings}"
+            echo "**Score: ${score}%** | Errors: ${errors} | Warnings: ${warnings}"
             echo ""
             echo "| Check | Score |"
             echo "|-------|-------|"
