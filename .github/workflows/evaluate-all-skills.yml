@@ -301,32 +301,6 @@ jobs:
               echo "# ${skill}"
               echo ""
 
-              # ── Summary table ────────────────────────────────────────────
-              echo "## Summary"
-              echo ""
-              echo "| Model | Eval Pass Rate |"
-              echo "|-------|:--------------:|"
-
-              if [ -n "$models" ]; then
-                echo "$models" | while IFS= read -r model; do
-                  eval_row=$(echo "$skill_evals" | jq -r --arg m "$model" '.[] | select(.model == $m)')
-                  pass_rate=$(echo "$eval_row" | jq -r '.pass_rate // ""')
-                  passed=$(echo "$eval_row"    | jq -r '.passed    // ""')
-                  total=$(echo "$eval_row"     | jq -r '.total     // ""')
-
-                  if [ -n "$pass_rate" ] && [ "$pass_rate" != "" ]; then
-                    eval_cell="${pass_rate}% (${passed}/${total})"
-                  else
-                    eval_cell="—"
-                  fi
-                  echo "| \`${model}\` | ${eval_cell} |"
-                done
-              else
-                echo "| — | No evals |"
-              fi
-
-              echo ""
-
               # ── Validation Checks (once per skill) ───────────────────────
               echo "## ${val_status} Validation Checks"
               echo ""
@@ -358,6 +332,32 @@ jobs:
               echo "</details>"
               echo ""
 
+              # ── Eval Results table ───────────────────────────────────────
+              echo "## Eval Results"
+              echo ""
+              echo "| Model | Pass Rate |"
+              echo "|-------|:---------:|"
+
+              if [ -n "$models" ]; then
+                echo "$models" | while IFS= read -r model; do
+                  eval_row=$(echo "$skill_evals" | jq -r --arg m "$model" '.[] | select(.model == $m)')
+                  pass_rate=$(echo "$eval_row" | jq -r '.pass_rate // ""')
+                  passed=$(echo "$eval_row"    | jq -r '.passed    // ""')
+                  total=$(echo "$eval_row"     | jq -r '.total     // ""')
+
+                  if [ -n "$pass_rate" ] && [ "$pass_rate" != "" ]; then
+                    eval_cell="${pass_rate}% (${passed}/${total})"
+                  else
+                    eval_cell="—"
+                  fi
+                  echo "| \`${model}\` | ${eval_cell} |"
+                done
+              else
+                echo "| — | No evals |"
+              fi
+
+              echo ""
+
               # ── Per-model eval detail ────────────────────────────────────
               if [ -n "$models" ]; then
                 echo "$models" | while IFS= read -r model; do
@@ -367,14 +367,14 @@ jobs:
                   total=$(echo "$eval_row"     | jq -r '.total     // ""')
 
                   if [ -n "$pass_rate" ] && [ "$pass_rate" != "" ]; then
-                    eval_header="✅ ${pass_rate}% (${passed}/${total})"
+                    eval_icon="✅"
+                    eval_header="${pass_rate}% (${passed}/${total})"
                   else
-                    eval_header="— No evals"
+                    eval_icon="—"
+                    eval_header="No evals"
                   fi
 
-                  echo "## \`${model}\`"
-                  echo ""
-                  echo "### Eval Results: ${eval_header}"
+                  echo "### ${eval_icon} \`${model}\`: ${eval_header}"
                   echo ""
                 done
               fi
