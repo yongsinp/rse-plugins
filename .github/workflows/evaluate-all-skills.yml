@@ -42,37 +42,36 @@ jobs:
       - name: Summary
         run: echo "Found ${{ steps.discover.outputs.count }} skills"
 
-  evaluate:
-    needs: [list-models, discover]
-    if: needs.discover.outputs.count > 0 && needs.list-models.outputs.count > 0
+  review:
+    needs: [discover]
+    if: needs.discover.outputs.count > 0
     runs-on: ubuntu-latest
     timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
         skill: ${{ fromJSON(needs.discover.outputs.all-skills) }}
-        model: ${{ fromJSON(needs.list-models.outputs.models) }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
       - name: Install Tessl
         uses: tesslio/setup-tessl@v2
 
+      - name: Derive skill name
+        id: skill-name
+        run: echo "value=$(basename '${{ matrix.skill }}')" >> "$GITHUB_OUTPUT"
+
       - name: Review SKILL.md
         continue-on-error: true
         id: review
         env:
           ANTHROPIC_BASE_URL: ${{ secrets.LITELLM_PROXY_URL }}
-          ANTHROPIC_MODEL: ${{ matrix.model }}
         run: |
           set +e
           output=$(tessl skill review ${{ matrix.skill }} --threshold 80 2>&1)
           review_exit=$?
           set -e
           echo "$output"
-
-          skill_name=$(basename '${{ matrix.skill }}')
-          model_name='${{ matrix.model }}'
 
           # Parse validation checks result
           validation=$(echo "$output" | grep -oP 'Overall: \K(PASSED|FAILED)')
@@ -90,51 +89,7 @@ jobs:
           # Extract judge evaluation block (everything between "Judge Evaluation" and "Review Score")
           judge_block=$(echo "$output" | sed -n '/^Judge Evaluation/,/^Review Score/{ /^Judge Evaluation/d; /^Review Score/d; p }')
 
-          if [ "$validation" = "PASSED" ]; then
-            validation_status="✅ PASSED"
-          else
-            validation_status="❌ FAILED"
-          fi
-
-          if [ -n "$score" ] && [ "$score" -ge 80 ]; then
-            judge_status="✅ PASSED"
-          else
-            judge_status="❌ FAILED"
-          fi
-
-          {
-            echo "# ${skill_name} (${model_name})"
-            echo ""
-            echo "## ${validation_status} Validation Checks"
-            echo ""
-            echo "Errors: ${errors} | Warnings: ${warnings}"
-            echo ""
-            echo "<details><summary>Validation Checks detail</summary>"
-            echo ""
-            echo '```'
-            echo "$validation_block"
-            echo '```'
-            echo "</details>"
-            echo ""
-            echo "## ${judge_status} LLM Judge Evaluation"
-            echo ""
-            echo "**Score: ${score}%**"
-            echo ""
-            echo "| Check | Score |"
-            echo "|-------|-------|"
-            echo "| Description | ${description}% |"
-            echo "| Content | ${content}% |"
-            echo ""
-            echo "<details><summary>Judge Evaluation detail</summary>"
-            echo ""
-            echo '```'
-            echo "$judge_block"
-            echo '```'
-            echo "</details>"
-            echo ""
-          } >> "$GITHUB_STEP_SUMMARY"
-
-          # Emit scalar outputs for result JSON
+          # Emit scalar outputs
           echo "exit-code=$review_exit"     >> "$GITHUB_OUTPUT"
           echo "validation=$validation"     >> "$GITHUB_OUTPUT"
           echo "errors=$errors"             >> "$GITHUB_OUTPUT"
@@ -155,6 +110,62 @@ jobs:
             echo "__EOF__"
           } >> "$GITHUB_OUTPUT"
 
+      - name: Save review JSON
+        if: always()
+        env:
+          VAL_BLOCK: ${{ steps.review.outputs.validation-block }}
+          JUDGE_BLOCK: ${{ steps.review.outputs.judge-block }}
+        run: |
+          skill_name='${{ steps.skill-name.outputs.value }}'
+          mkdir -p /tmp/review-results
+
+          printf '%s' "$VAL_BLOCK"   > /tmp/val_block.txt
+          printf '%s' "$JUDGE_BLOCK" > /tmp/judge_block.txt
+
+          jq -n \
+            --arg  skill       "$skill_name" \
+            --arg  validation  '${{ steps.review.outputs.validation }}' \
+            --arg  errors      '${{ steps.review.outputs.errors }}' \
+            --arg  warnings    '${{ steps.review.outputs.warnings }}' \
+            --arg  score       '${{ steps.review.outputs.score }}' \
+            --arg  description '${{ steps.review.outputs.description }}' \
+            --arg  content     '${{ steps.review.outputs.content }}' \
+            --rawfile val_block   /tmp/val_block.txt \
+            --rawfile judge_block /tmp/judge_block.txt \
+            '{
+              skill:            $skill,
+              validation:       $validation,
+              errors:           $errors,
+              warnings:         $warnings,
+              review_score:     $score,
+              description:      $description,
+              content:          $content,
+              validation_block: $val_block,
+              judge_block:      $judge_block
+            }' \
+            > "/tmp/review-results/${skill_name}.json"
+
+      - name: Upload review JSON
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: review-result--${{ steps.skill-name.outputs.value }}
+          path: /tmp/review-results/
+          retention-days: 1
+
+  evaluate:
+    needs: [list-models, discover]
+    if: needs.discover.outputs.count > 0 && needs.list-models.outputs.count > 0
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        skill: ${{ fromJSON(needs.discover.outputs.all-skills) }}
+        model: ${{ fromJSON(needs.list-models.outputs.models) }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
       - name: Derive skill name
         id: skill-name
         run: echo "value=$(basename '${{ matrix.skill }}')" >> "$GITHUB_OUTPUT"
@@ -171,55 +182,38 @@ jobs:
           anthropic-api-key: ${{ secrets.LITELLM_API_KEY }}
           model: ${{ matrix.model }}
           pass-threshold: '80'
+          upload-viewer: 'true'
+          post-comment: 'false'
 
-      - name: Save result JSON for summary
+      - name: Save eval JSON
         if: always()
-        env:
-          VAL_BLOCK: ${{ steps.review.outputs.validation-block }}
-          JUDGE_BLOCK: ${{ steps.review.outputs.judge-block }}
         run: |
           skill_name='${{ steps.skill-name.outputs.value }}'
           model_name='${{ matrix.model }}'
           safe_model=$(echo "$model_name" | tr '/: ' '---')
-
           mkdir -p /tmp/eval-results
 
-          # Write multi-line text blocks to temp files via env vars (safe for multi-line)
-          printf '%s' "$VAL_BLOCK"   > /tmp/val_block.txt
-          printf '%s' "$JUDGE_BLOCK" > /tmp/judge_block.txt
+          # Read outputs written by skill-eval-action to GITHUB_OUTPUT
+          pass_rate=$(grep '^pass_rate=' "$GITHUB_OUTPUT" | tail -1 | cut -d= -f2 || echo '')
+          passed=$(grep '^passed='    "$GITHUB_OUTPUT" | tail -1 | cut -d= -f2 || echo '')
+          total=$(grep '^total='     "$GITHUB_OUTPUT" | tail -1 | cut -d= -f2 || echo '')
 
           jq -n \
-            --arg  skill       "$skill_name" \
-            --arg  model       "$model_name" \
-            --arg  validation  '${{ steps.review.outputs.validation }}' \
-            --arg  errors      '${{ steps.review.outputs.errors }}' \
-            --arg  warnings    '${{ steps.review.outputs.warnings }}' \
-            --arg  score       '${{ steps.review.outputs.score }}' \
-            --arg  description '${{ steps.review.outputs.description }}' \
-            --arg  content     '${{ steps.review.outputs.content }}' \
-            --rawfile val_block   /tmp/val_block.txt \
-            --rawfile judge_block /tmp/judge_block.txt \
-            --arg  pass_rate   '${{ steps.evaluate.outputs.pass-rate }}' \
-            --arg  passed      '${{ steps.evaluate.outputs.passed }}' \
-            --arg  total       '${{ steps.evaluate.outputs.total }}' \
+            --arg skill     "$skill_name" \
+            --arg model     "$model_name" \
+            --arg pass_rate "$pass_rate" \
+            --arg passed    "$passed" \
+            --arg total     "$total" \
             '{
-              skill:            $skill,
-              model:            $model,
-              validation:       $validation,
-              errors:           $errors,
-              warnings:         $warnings,
-              review_score:     $score,
-              description:      $description,
-              content:          $content,
-              validation_block: $val_block,
-              judge_block:      $judge_block,
-              pass_rate:        $pass_rate,
-              passed:           $passed,
-              total:            $total
+              skill:     $skill,
+              model:     $model,
+              pass_rate: $pass_rate,
+              passed:    $passed,
+              total:     $total
             }' \
             > "/tmp/eval-results/${skill_name}__${safe_model}.json"
 
-      - name: Upload result JSON
+      - name: Upload eval JSON
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -227,45 +221,52 @@ jobs:
           path: /tmp/eval-results/
           retention-days: 1
 
-      - name: Propagate review result
-        if: always()
-        run: |
-          review_exit=${{ steps.review.outputs.exit-code }}
-          eval_outcome="${{ steps.evaluate.outcome }}"
-          if [ "$eval_outcome" = "failure" ]; then
-            eval_exit=1
-          else
-            eval_exit=0
-          fi
-          exit $(( review_exit | eval_exit ))
-
   summarize:
-    needs: evaluate
+    needs: [review, evaluate]
     if: always()
     runs-on: ubuntu-latest
     steps:
-      - name: Download all result JSONs
+      - name: Download all review JSONs
+        uses: actions/download-artifact@v4
+        with:
+          pattern: review-result--*
+          path: /tmp/all-reviews
+          merge-multiple: true
+
+      - name: Download all eval JSONs
         uses: actions/download-artifact@v4
         with:
           pattern: eval-result--*
-          path: /tmp/all-results
+          path: /tmp/all-evals
           merge-multiple: true
 
       - name: Render merged summaries
         run: |
-          # Collect all JSON files
-          result_files=$(find /tmp/all-results -name '*.json' | sort)
+          review_files=$(find /tmp/all-reviews -name '*.json' 2>/dev/null | sort)
+          eval_files=$(find /tmp/all-evals   -name '*.json' 2>/dev/null | sort)
 
-          if [ -z "$result_files" ]; then
+          if [ -z "$review_files" ] && [ -z "$eval_files" ]; then
             echo "No evaluation results found." >> "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
 
-          # Merge all JSONs into one array
-          all_json=$(echo "$result_files" | xargs jq -s '.')
+          # Build merged arrays (empty array fallback if no files)
+          if [ -n "$review_files" ]; then
+            reviews=$(echo "$review_files" | xargs jq -s '.')
+          else
+            reviews='[]'
+          fi
+          if [ -n "$eval_files" ]; then
+            evals=$(echo "$eval_files" | xargs jq -s '.')
+          else
+            evals='[]'
+          fi
 
-          # Get unique skill names (sorted)
-          skills=$(echo "$all_json" | jq -r '.[].skill' | sort -u)
+          # Get unique skill names across both sets
+          skills=$(printf '%s\n%s' \
+            "$(echo "$reviews" | jq -r '.[].skill')" \
+            "$(echo "$evals"   | jq -r '.[].skill')" \
+            | sort -u | grep -v '^$')
 
           {
             echo "# Evaluation Summary"
@@ -273,10 +274,25 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
           echo "$skills" | while IFS= read -r skill; do
-            # All results for this skill
-            skill_results=$(echo "$all_json" | jq --arg s "$skill" '[.[] | select(.skill == $s)]')
-            models=$(echo "$skill_results" | jq -r '.[].model' | sort -u)
-            model_count=$(echo "$models" | wc -l | tr -d ' ')
+            review_row=$(echo "$reviews" | jq --arg s "$skill" 'map(select(.skill == $s)) | first // {}')
+            skill_evals=$(echo "$evals"  | jq --arg s "$skill" '[.[] | select(.skill == $s)]')
+            models=$(echo "$skill_evals" | jq -r '.[].model' | sort -u)
+
+            val=$(echo "$review_row"      | jq -r '.validation    // ""')
+            errors=$(echo "$review_row"   | jq -r '.errors        // ""')
+            warnings=$(echo "$review_row" | jq -r '.warnings      // ""')
+            rev_score=$(echo "$review_row"| jq -r '.review_score  // ""')
+            desc=$(echo "$review_row"     | jq -r '.description   // ""')
+            content=$(echo "$review_row"  | jq -r '.content       // ""')
+            val_block=$(echo "$review_row"| jq -r '.validation_block // ""')
+            judge_block=$(echo "$review_row"| jq -r '.judge_block // ""')
+
+            if [ "$val" = "PASSED" ]; then val_status="✅ PASSED"; else val_status="❌ FAILED"; fi
+            if [ -n "$rev_score" ] && [ "$rev_score" -ge 80 ] 2>/dev/null; then
+              judge_status="✅ PASSED"
+            else
+              judge_status="❌ FAILED"
+            fi
 
             {
               echo "---"
@@ -284,92 +300,83 @@ jobs:
               echo "# ${skill}"
               echo ""
 
-              # ── Summary table ──────────────────────────────────────────────
+              # ── Summary table ────────────────────────────────────────────
               echo "## Summary"
               echo ""
-              echo "| Model | Validation | Review Score | Eval Pass Rate |"
-              echo "|-------|------------|:------------:|:--------------:|"
+              echo "| Model | Eval Pass Rate |"
+              echo "|-------|:--------------:|"
 
-              echo "$models" | while IFS= read -r model; do
-                row=$(echo "$skill_results" | jq -r --arg m "$model" '.[] | select(.model == $m)')
+              if [ -n "$models" ]; then
+                echo "$models" | while IFS= read -r model; do
+                  eval_row=$(echo "$skill_evals" | jq -r --arg m "$model" '.[] | select(.model == $m)')
+                  pass_rate=$(echo "$eval_row" | jq -r '.pass_rate // ""')
+                  passed=$(echo "$eval_row"    | jq -r '.passed    // ""')
+                  total=$(echo "$eval_row"     | jq -r '.total     // ""')
 
-                val=$(echo "$row" | jq -r '.validation')
-                rev_score=$(echo "$row" | jq -r '.review_score')
-                pass_rate=$(echo "$row" | jq -r '.pass_rate')
-                passed=$(echo "$row"  | jq -r '.passed')
-                total=$(echo "$row"   | jq -r '.total')
-
-                if [ "$val" = "PASSED" ]; then val_cell="✅ PASSED"; else val_cell="❌ FAILED"; fi
-
-                if [ -n "$rev_score" ] && [ "$rev_score" -ge 80 ] 2>/dev/null; then
-                  score_cell="${rev_score}% ✅"
-                elif [ -n "$rev_score" ]; then
-                  score_cell="${rev_score}% ❌"
-                else
-                  score_cell="—"
-                fi
-
-                if [ -n "$pass_rate" ] && [ "$pass_rate" != "" ]; then
-                  eval_cell="${pass_rate}% (${passed}/${total})"
-                else
-                  eval_cell="—"
-                fi
-
-                echo "| \`${model}\` | ${val_cell} | ${score_cell} | ${eval_cell} |"
-              done
+                  if [ -n "$pass_rate" ] && [ "$pass_rate" != "" ]; then
+                    eval_cell="${pass_rate}% (${passed}/${total})"
+                  else
+                    eval_cell="—"
+                  fi
+                  echo "| \`${model}\` | ${eval_cell} |"
+                done
+              else
+                echo "| — | No evals |"
+              fi
 
               echo ""
 
-              # ── Per-model detail sections ───────────────────────────────
-              echo "$models" | while IFS= read -r model; do
-                row=$(echo "$skill_results" | jq -r --arg m "$model" '.[] | select(.model == $m)')
+              # ── Validation Checks (once per skill) ───────────────────────
+              echo "## ${val_status} Validation Checks"
+              echo ""
+              echo "Errors: ${errors} | Warnings: ${warnings}"
+              echo ""
+              echo "<details><summary>Validation Checks detail</summary>"
+              echo ""
+              echo '```'
+              echo "$val_block"
+              echo '```'
+              echo "</details>"
+              echo ""
 
-                val=$(echo "$row"         | jq -r '.validation')
-                errors=$(echo "$row"      | jq -r '.errors')
-                warnings=$(echo "$row"    | jq -r '.warnings')
-                rev_score=$(echo "$row"   | jq -r '.review_score')
-                desc=$(echo "$row"        | jq -r '.description')
-                content=$(echo "$row"     | jq -r '.content')
-                val_block=$(echo "$row"   | jq -r '.validation_block')
-                judge_block=$(echo "$row" | jq -r '.judge_block')
+              # ── LLM Judge Evaluation (once per skill) ────────────────────
+              echo "## ${judge_status} LLM Judge Evaluation"
+              echo ""
+              echo "**Score: ${rev_score}%**"
+              echo ""
+              echo "| Check | Score |"
+              echo "|-------|-------|"
+              echo "| Description | ${desc}% |"
+              echo "| Content | ${content}% |"
+              echo ""
+              echo "<details><summary>Judge Evaluation detail</summary>"
+              echo ""
+              echo '```'
+              echo "$judge_block"
+              echo '```'
+              echo "</details>"
+              echo ""
 
-                if [ "$val" = "PASSED" ]; then val_status="✅ PASSED"; else val_status="❌ FAILED"; fi
-                if [ -n "$rev_score" ] && [ "$rev_score" -ge 80 ] 2>/dev/null; then
-                  judge_status="✅ PASSED"
-                else
-                  judge_status="❌ FAILED"
-                fi
+              # ── Per-model eval detail ────────────────────────────────────
+              if [ -n "$models" ]; then
+                echo "$models" | while IFS= read -r model; do
+                  eval_row=$(echo "$skill_evals" | jq -r --arg m "$model" '.[] | select(.model == $m)')
+                  pass_rate=$(echo "$eval_row" | jq -r '.pass_rate // ""')
+                  passed=$(echo "$eval_row"    | jq -r '.passed    // ""')
+                  total=$(echo "$eval_row"     | jq -r '.total     // ""')
 
-                echo "## \`${model}\`"
-                echo ""
-                echo "### ${val_status} Validation Checks"
-                echo ""
-                echo "Errors: ${errors} | Warnings: ${warnings}"
-                echo ""
-                echo "<details><summary>Validation Checks detail</summary>"
-                echo ""
-                echo '```'
-                echo "$val_block"
-                echo '```'
-                echo "</details>"
-                echo ""
-                echo "### ${judge_status} LLM Judge Evaluation"
-                echo ""
-                echo "**Score: ${rev_score}%**"
-                echo ""
-                echo "| Check | Score |"
-                echo "|-------|-------|"
-                echo "| Description | ${desc}% |"
-                echo "| Content | ${content}% |"
-                echo ""
-                echo "<details><summary>Judge Evaluation detail</summary>"
-                echo ""
-                echo '```'
-                echo "$judge_block"
-                echo '```'
-                echo "</details>"
-                echo ""
-              done
+                  if [ -n "$pass_rate" ] && [ "$pass_rate" != "" ]; then
+                    eval_header="✅ ${pass_rate}% (${passed}/${total})"
+                  else
+                    eval_header="— No evals"
+                  fi
+
+                  echo "## \`${model}\`"
+                  echo ""
+                  echo "### Eval Results: ${eval_header}"
+                  echo ""
+                done
+              fi
 
             } >> "$GITHUB_STEP_SUMMARY"
           done
