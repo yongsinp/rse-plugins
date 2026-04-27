@@ -103,7 +103,9 @@ jobs:
           fi
 
           {
-            echo "## ${validation_status} Validation Checks: ${skill_name} (${model_name})"
+            echo "# ${skill_name} (${model_name})"
+            echo ""
+            echo "## ${validation_status} Validation Checks"
             echo ""
             echo "Errors: ${errors} | Warnings: ${warnings}"
             echo ""
@@ -114,7 +116,7 @@ jobs:
             echo '```'
             echo "</details>"
             echo ""
-            echo "## ${judge_status} LLM Judge Evaluation: ${skill_name} (${model_name})"
+            echo "## ${judge_status} LLM Judge Evaluation"
             echo ""
             echo "**Score: ${score}%**"
             echo ""
