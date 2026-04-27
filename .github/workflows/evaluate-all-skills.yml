@@ -6,6 +6,25 @@ permissions:
   pull-requests: write
 
 jobs:
+  list-models:
+    runs-on: ubuntu-latest
+    outputs:
+      models: ${{ steps.list.outputs.models }}
+      count: ${{ steps.list.outputs.count }}
+    steps:
+      - name: Fetch available models from LiteLLM proxy
+        id: list
+        run: |
+          response=$(curl -fsSL \
+            -H "Authorization: Bearer ${{ secrets.LITELLM_API_KEY }}" \
+            "${{ secrets.LITELLM_PROXY_URL }}/v1/models")
+          models=$(echo "$response" | jq -c '[.data[].id] | sort')
+          echo "models=$models" >> "$GITHUB_OUTPUT"
+          echo "count=$(echo "$models" | jq length)" >> "$GITHUB_OUTPUT"
+
+      - name: Summary
+        run: echo "Found ${{ steps.list.outputs.count }} models"
+
   discover:
     runs-on: ubuntu-latest
     outputs:
@@ -27,14 +46,15 @@ jobs:
         run: echo "Found ${{ steps.discover.outputs.count }} skills"
 
   evaluate:
-    needs: discover
-    if: needs.discover.outputs.count > 0
+    needs: [list-models, discover]
+    if: needs.discover.outputs.count > 0 && needs.list-models.outputs.count > 0
     runs-on: ubuntu-latest
     timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
         skill: ${{ fromJSON(needs.discover.outputs.all-skills) }}
+        model: ${{ fromJSON(needs.list-models.outputs.models) }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
@@ -44,6 +64,9 @@ jobs:
       - name: Review SKILL.md
         continue-on-error: true
         id: review
+        env:
+          ANTHROPIC_BASE_URL: ${{ secrets.LITELLM_PROXY_URL }}
+          ANTHROPIC_MODEL: ${{ matrix.model }}
         run: |
           set +e
           output=$(tessl skill review ${{ matrix.skill }} --threshold 80 2>&1)
@@ -52,6 +75,7 @@ jobs:
           echo "$output"
 
           skill_name=$(basename '${{ matrix.skill }}')
+          model_name='${{ matrix.model }}'
 
           # Parse validation checks result
           validation=$(echo "$output" | grep -oP 'Overall: \K(PASSED|FAILED)')
@@ -82,7 +106,7 @@ jobs:
           fi
 
           {
-            echo "## ${validation_status} Validation Checks: ${skill_name}"
+            echo "## ${validation_status} Validation Checks: ${skill_name} (${model_name})"
             echo ""
             echo "Errors: ${errors} | Warnings: ${warnings}"
             echo ""
@@ -93,7 +117,7 @@ jobs:
             echo '```'
             echo "</details>"
             echo ""
-            echo "## ${judge_status} LLM Judge Evaluation: ${skill_name}"
+            echo "## ${judge_status} LLM Judge Evaluation: ${skill_name} (${model_name})"
             echo ""
             echo "**Score: ${score}%**"
             echo ""
@@ -127,6 +151,7 @@ jobs:
           skill-name: ${{ steps.skill-name.outputs.value }}
           skill-path: ${{ matrix.skill }}
           anthropic-api-key: ${{ secrets.LITELLM_API_KEY }}
+          model: ${{ matrix.model }}
           pass-threshold: '80'
 
       - name: Propagate review result
