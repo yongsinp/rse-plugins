@@ -403,11 +403,11 @@ jobs:
                   if [ -n "$skill_rate" ] && [ -n "$base_rate" ] && [ "$skill_rate" != "" ] && [ "$base_rate" != "" ]; then
                     delta=$(awk "BEGIN {printf \"%.1f\", $skill_rate - $base_rate}")
                     if awk "BEGIN {exit !($delta > 0)}"; then
-                      delta_cell="+${delta}%"
+                      delta_cell="+${delta}pp"
                     elif awk "BEGIN {exit !($delta < 0)}"; then
-                      delta_cell="${delta}%"
+                      delta_cell="${delta}pp"
                     else
-                      delta_cell="0%"
+                      delta_cell="0pp"
                     fi
                   else
                     delta_cell="—"
