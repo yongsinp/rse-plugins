@@ -144,7 +144,7 @@ jobs:
       - name: Evaluate skill
         id: evaluate
         if: ${{ hashFiles(format('{0}/evals', matrix.skill)) != '' }}
-        uses: skill-bench/skill-eval-action@v1
+        uses: yongsinp/skill-eval-action@feature/model_change
         env:
           ANTHROPIC_BASE_URL: ${{ secrets.LITELLM_PROXY_URL }}
         with:
