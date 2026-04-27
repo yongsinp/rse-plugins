@@ -30,7 +30,6 @@ jobs:
     outputs:
       all-skills: ${{ steps.discover.outputs.all-skills }}
       count: ${{ steps.discover.outputs.count }}
-      skill-chunks: ${{ steps.discover.outputs.skill-chunks }}
       eval-skills: ${{ steps.discover.outputs.eval-skills }}
       eval-count: ${{ steps.discover.outputs.eval-count }}
     steps:
@@ -44,10 +43,6 @@ jobs:
           all=$(find plugins community-plugins -name "SKILL.md" -exec dirname {} \; | sort -u | jq -R -s -c 'split("\n") | map(select(. != ""))')
           echo "all-skills=$all" >> "$GITHUB_OUTPUT"
           echo "count=$(echo $all | jq length)" >> "$GITHUB_OUTPUT"
-
-          # Split all skills into chunks of 8 for batched review jobs
-          chunks=$(echo "$all" | jq -c '[range(0; length; 8) as $i | .[$i:$i+8]]')
-          echo "skill-chunks=$chunks" >> "$GITHUB_OUTPUT"
 
           eval_skills=$(find plugins community-plugins -name "SKILL.md" -exec dirname {} \; | sort -u | while read -r d; do [ -d "$d/evals" ] && echo "$d"; done | jq -R -s -c 'split("\n") | map(select(. != ""))')
           echo "eval-skills=$eval_skills" >> "$GITHUB_OUTPUT"
@@ -64,81 +59,106 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        chunk: ${{ fromJSON(needs.discover.outputs.skill-chunks) }}
+        skill: ${{ fromJSON(needs.discover.outputs.all-skills) }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
       - name: Install Tessl
         uses: tesslio/setup-tessl@v2
 
-      - name: Review skills in chunk
+      - name: Derive skill name
+        id: skill-name
+        run: echo "value=$(basename '${{ matrix.skill }}')" >> "$GITHUB_OUTPUT"
+
+      - name: Review SKILL.md
         continue-on-error: true
+        id: review
         env:
           ANTHROPIC_BASE_URL: ${{ secrets.LITELLM_PROXY_URL }}
-          PASS_THRESHOLD: ${{ env.PASS_THRESHOLD }}
         run: |
+          set +e
+          output=$(tessl skill review ${{ matrix.skill }} --threshold ${{ env.PASS_THRESHOLD }} 2>&1)
+          review_exit=$?
+          set -e
+          echo "$output"
+
+          # Parse validation checks result
+          validation=$(echo "$output" | grep -oP 'Overall: \K(PASSED|FAILED)')
+          errors=$(echo "$output" | grep -oP '\d+(?= errors)')
+          warnings=$(echo "$output" | grep -oP '\d+(?= warnings)')
+
+          # Parse judge evaluation result
+          score=$(echo "$output" | grep -oP 'Review Score: \K\d+')
+          description=$(echo "$output" | grep -oP '(?<=Description: )\d+')
+          content=$(echo "$output" | grep -oP '(?<=Content: )\d+')
+
+          # Extract validation checks block (everything before "Judge Evaluation")
+          validation_block=$(echo "$output" | sed -n '/^Validation Checks/,/^Judge Evaluation/{ /^Judge Evaluation/d; p }')
+
+          # Extract judge evaluation block (everything between "Judge Evaluation" and "Review Score")
+          judge_block=$(echo "$output" | sed -n '/^Judge Evaluation/,/^Review Score/{ /^Judge Evaluation/d; /^Review Score/d; p }')
+
+          # Emit scalar outputs
+          echo "exit-code=$review_exit"     >> "$GITHUB_OUTPUT"
+          echo "validation=$validation"     >> "$GITHUB_OUTPUT"
+          echo "errors=$errors"             >> "$GITHUB_OUTPUT"
+          echo "warnings=$warnings"         >> "$GITHUB_OUTPUT"
+          echo "score=$score"               >> "$GITHUB_OUTPUT"
+          echo "description=$description"   >> "$GITHUB_OUTPUT"
+          echo "content=$content"           >> "$GITHUB_OUTPUT"
+
+          # Emit multi-line outputs using EOF delimiters
+          {
+            echo "validation-block<<__EOF__"
+            echo "$validation_block"
+            echo "__EOF__"
+          } >> "$GITHUB_OUTPUT"
+          {
+            echo "judge-block<<__EOF__"
+            echo "$judge_block"
+            echo "__EOF__"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Save review JSON
+        if: always()
+        env:
+          VAL_BLOCK: ${{ steps.review.outputs.validation-block }}
+          JUDGE_BLOCK: ${{ steps.review.outputs.judge-block }}
+        run: |
+          skill_name='${{ steps.skill-name.outputs.value }}'
           mkdir -p /tmp/review-results
 
-          for skill in $(echo '${{ toJSON(matrix.chunk) }}' | jq -r '.[]'); do
-            skill_name=$(basename "$skill")
-            echo "::group::Review $skill_name"
+          printf '%s' "$VAL_BLOCK"   > /tmp/val_block.txt
+          printf '%s' "$JUDGE_BLOCK" > /tmp/judge_block.txt
 
-            set +e
-            output=$(tessl skill review "$skill" --threshold "$PASS_THRESHOLD" 2>&1)
-            review_exit=$?
-            set -e
-            echo "$output"
+          jq -n \
+            --arg  skill       "$skill_name" \
+            --arg  validation  '${{ steps.review.outputs.validation }}' \
+            --arg  errors      '${{ steps.review.outputs.errors }}' \
+            --arg  warnings    '${{ steps.review.outputs.warnings }}' \
+            --arg  score       '${{ steps.review.outputs.score }}' \
+            --arg  description '${{ steps.review.outputs.description }}' \
+            --arg  content     '${{ steps.review.outputs.content }}' \
+            --rawfile val_block   /tmp/val_block.txt \
+            --rawfile judge_block /tmp/judge_block.txt \
+            '{
+              skill:            $skill,
+              validation:       $validation,
+              errors:           $errors,
+              warnings:         $warnings,
+              review_score:     $score,
+              description:      $description,
+              content:          $content,
+              validation_block: $val_block,
+              judge_block:      $judge_block
+            }' \
+            > "/tmp/review-results/${skill_name}.json"
 
-            # Parse validation checks result
-            validation=$(echo "$output" | grep -oP 'Overall: \K(PASSED|FAILED)')
-            errors=$(echo "$output" | grep -oP '\d+(?= errors)')
-            warnings=$(echo "$output" | grep -oP '\d+(?= warnings)')
-
-            # Parse judge evaluation result
-            score=$(echo "$output" | grep -oP 'Review Score: \K\d+')
-            description=$(echo "$output" | grep -oP '(?<=Description: )\d+')
-            content=$(echo "$output" | grep -oP '(?<=Content: )\d+')
-
-            # Extract validation checks block (everything before "Judge Evaluation")
-            validation_block=$(echo "$output" | sed -n '/^Validation Checks/,/^Judge Evaluation/{ /^Judge Evaluation/d; p }')
-
-            # Extract judge evaluation block (everything between "Judge Evaluation" and "Review Score")
-            judge_block=$(echo "$output" | sed -n '/^Judge Evaluation/,/^Review Score/{ /^Judge Evaluation/d; /^Review Score/d; p }')
-
-            printf '%s' "$validation_block" > /tmp/val_block.txt
-            printf '%s' "$judge_block"      > /tmp/judge_block.txt
-
-            jq -n \
-              --arg  skill       "$skill_name" \
-              --arg  validation  "$validation" \
-              --arg  errors      "$errors" \
-              --arg  warnings    "$warnings" \
-              --arg  score       "$score" \
-              --arg  description "$description" \
-              --arg  content     "$content" \
-              --rawfile val_block   /tmp/val_block.txt \
-              --rawfile judge_block /tmp/judge_block.txt \
-              '{
-                skill:            $skill,
-                validation:       $validation,
-                errors:           $errors,
-                warnings:         $warnings,
-                review_score:     $score,
-                description:      $description,
-                content:          $content,
-                validation_block: $val_block,
-                judge_block:      $judge_block
-              }' \
-              > "/tmp/review-results/${skill_name}.json"
-
-            echo "::endgroup::"
-          done
-
-      - name: Upload review JSONs
+      - name: Upload review JSON
         if: always()
         uses: actions/upload-artifact@v7.0.1
         with:
-          name: review-result--chunk-${{ strategy.job-index }}
+          name: review-result--${{ steps.skill-name.outputs.value }}
           path: /tmp/review-results/
           retention-days: 1
 
