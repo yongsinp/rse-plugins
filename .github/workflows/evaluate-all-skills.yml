@@ -147,7 +147,7 @@ jobs:
 
       - name: Upload review JSON
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7.0.1
         with:
           name: review-result--${{ steps.skill-name.outputs.value }}
           path: /tmp/review-results/
@@ -215,7 +215,7 @@ jobs:
 
       - name: Upload eval JSON
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7.0.1
         with:
           name: eval-result--${{ steps.skill-name.outputs.value }}--${{ matrix.model }}
           path: /tmp/eval-results/
@@ -227,14 +227,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Download all review JSONs
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8.0.1
         with:
           pattern: review-result--*
           path: /tmp/all-reviews
           merge-multiple: true
 
       - name: Download all eval JSONs
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8.0.1
         with:
           pattern: eval-result--*
           path: /tmp/all-evals
