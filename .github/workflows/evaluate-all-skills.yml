@@ -448,18 +448,12 @@ jobs:
                   skill_time=$(echo "$skill_row"   | jq -r '.total_time   // ""')
 
                   if [ -n "$skill_rate" ] && [ "$skill_rate" != "" ]; then
-                    if awk "BEGIN {exit !($skill_rate >= $PASS_THRESHOLD)}"; then
-                      eval_icon="✅"
-                    else
-                      eval_icon="❌"
-                    fi
                     eval_header="${skill_rate}% (${skill_pass}/${skill_tot})"
                   else
-                    eval_icon="—"
                     eval_header="No evals"
                   fi
 
-                  echo "### ${eval_icon} \`${model}\`: ${eval_header}"
+                  echo "### \`${model}\`: ${eval_header}"
                   echo ""
 
                   # Helper to render a case breakdown table for a given row
