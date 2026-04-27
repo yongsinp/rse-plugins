@@ -356,8 +356,8 @@ jobs:
               # ── Eval Results table ───────────────────────────────────────
               echo "## 📊 Eval Results"
               echo ""
-              echo "| Model | Pass Rate | Tokens |"
-              echo "|-------|:---------:|-------:|"
+              echo "| Model | Pass Rate | Tokens Used |"
+              echo "|-------|:---------:|------------:|"
 
               if [ -n "$models" ]; then
                 echo "$models" | while IFS= read -r model; do
