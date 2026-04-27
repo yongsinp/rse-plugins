@@ -30,6 +30,8 @@ jobs:
     outputs:
       all-skills: ${{ steps.discover.outputs.all-skills }}
       count: ${{ steps.discover.outputs.count }}
+      eval-skills: ${{ steps.discover.outputs.eval-skills }}
+      eval-count: ${{ steps.discover.outputs.eval-count }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
@@ -42,8 +44,12 @@ jobs:
           echo "all-skills=$all" >> "$GITHUB_OUTPUT"
           echo "count=$(echo $all | jq length)" >> "$GITHUB_OUTPUT"
 
+          eval_skills=$(find plugins community-plugins -name "SKILL.md" -exec dirname {} \; | sort -u | while read -r d; do [ -d "$d/evals" ] && echo "$d"; done | jq -R -s -c 'split("\n") | map(select(. != ""))')
+          echo "eval-skills=$eval_skills" >> "$GITHUB_OUTPUT"
+          echo "eval-count=$(echo $eval_skills | jq length)" >> "$GITHUB_OUTPUT"
+
       - name: Summary
-        run: echo "Found ${{ steps.discover.outputs.count }} skills"
+        run: echo "Found ${{ steps.discover.outputs.count }} skills (${{ steps.discover.outputs.eval-count }} with evals)"
 
   review:
     needs: [discover]
@@ -158,13 +164,13 @@ jobs:
 
   evaluate:
     needs: [list-models, discover]
-    if: needs.discover.outputs.count > 0 && needs.list-models.outputs.count > 0
+    if: needs.discover.outputs.eval-count > 0 && needs.list-models.outputs.count > 0
     runs-on: ubuntu-latest
     timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
-        skill: ${{ fromJSON(needs.discover.outputs.all-skills) }}
+        skill: ${{ fromJSON(needs.discover.outputs.eval-skills) }}
         model: ${{ fromJSON(needs.list-models.outputs.models) }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
@@ -175,7 +181,6 @@ jobs:
 
       - name: Evaluate skill
         id: evaluate
-        if: ${{ hashFiles(format('{0}/evals', matrix.skill)) != '' }}
         uses: yongsinp/skill-eval-action@feature/model_change
         env:
           ANTHROPIC_BASE_URL: ${{ secrets.LITELLM_PROXY_URL }}
