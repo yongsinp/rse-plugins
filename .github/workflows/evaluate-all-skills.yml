@@ -1,6 +1,9 @@
 name: Evaluate All Skills
 on: workflow_dispatch
 
+env:
+  PASS_THRESHOLD: '80'
+
 permissions:
   contents: read
   pull-requests: write
@@ -68,7 +71,7 @@ jobs:
           ANTHROPIC_BASE_URL: ${{ secrets.LITELLM_PROXY_URL }}
         run: |
           set +e
-          output=$(tessl skill review ${{ matrix.skill }} --threshold 80 2>&1)
+          output=$(tessl skill review ${{ matrix.skill }} --threshold ${{ env.PASS_THRESHOLD }} 2>&1)
           review_exit=$?
           set -e
           echo "$output"
@@ -181,7 +184,7 @@ jobs:
           skill-path: ${{ matrix.skill }}
           anthropic-api-key: ${{ secrets.LITELLM_API_KEY }}
           model: ${{ matrix.model }}
-          pass-threshold: '80'
+          pass-threshold: ${{ env.PASS_THRESHOLD }}
           upload-viewer: 'true'
           post-comment: 'false'
           write-summary: 'false'
@@ -299,7 +302,7 @@ jobs:
             judge_block=$(echo "$review_row"| jq -r '.judge_block // ""')
 
             if [ "$val" = "PASSED" ]; then val_status="✅ PASSED"; else val_status="❌ FAILED"; fi
-            if [ -n "$rev_score" ] && [ "$rev_score" -ge 80 ] 2>/dev/null; then
+            if [ -n "$rev_score" ] && [ "$rev_score" -ge "$PASS_THRESHOLD" ] 2>/dev/null; then
               judge_status="✅ PASSED"
             else
               judge_status="❌ FAILED"
@@ -357,7 +360,7 @@ jobs:
                   total_tokens=$(echo "$eval_row"  | jq -r '.total_tokens // ""')
 
                   if [ -n "$pass_rate" ] && [ "$pass_rate" != "" ]; then
-                    if awk "BEGIN {exit !($pass_rate >= 80)}"; then
+                    if awk "BEGIN {exit !($pass_rate >= $PASS_THRESHOLD)}"; then
                       eval_cell="✅ ${pass_rate}% (${passed}/${total})"
                     else
                       eval_cell="❌ ${pass_rate}% (${passed}/${total})"
