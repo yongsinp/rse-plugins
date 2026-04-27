@@ -343,7 +343,7 @@ jobs:
               echo ""
 
               # ── Eval Results table ───────────────────────────────────────
-              echo "## Eval Results"
+              echo "## 📊 Eval Results"
               echo ""
               echo "| Model | Pass Rate | Tokens |"
               echo "|-------|:---------:|-------:|"
