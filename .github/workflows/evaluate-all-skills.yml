@@ -357,7 +357,11 @@ jobs:
                   total_tokens=$(echo "$eval_row"  | jq -r '.total_tokens // ""')
 
                   if [ -n "$pass_rate" ] && [ "$pass_rate" != "" ]; then
-                    eval_cell="${pass_rate}% (${passed}/${total})"
+                    if awk "BEGIN {exit !($pass_rate >= 80)}"; then
+                      eval_cell="✅ ${pass_rate}% (${passed}/${total})"
+                    else
+                      eval_cell="❌ ${pass_rate}% (${passed}/${total})"
+                    fi
                   else
                     eval_cell="—"
                   fi
