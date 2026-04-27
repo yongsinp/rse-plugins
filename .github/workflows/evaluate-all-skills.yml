@@ -213,12 +213,16 @@ jobs:
           passed="${PASSED}"
           total="${TOTAL}"
 
-          # Read token usage from summary.json written by skill-eval-action
+          # Read token usage and per-case results from summary.json
           summary_file="$RUNNER_TEMP/skill-eval/${skill_name}/summary.json"
           if [ -f "$summary_file" ]; then
             total_tokens=$(jq -r '.total_tokens // ""' "$summary_file")
+            total_time=$(jq -r '.total_time // ""' "$summary_file")
+            results=$(jq -c '.results // []' "$summary_file")
           else
             total_tokens=''
+            total_time=''
+            results='[]'
           fi
 
           jq -n \
@@ -229,6 +233,8 @@ jobs:
             --arg passed       "$passed" \
             --arg total        "$total" \
             --arg total_tokens "$total_tokens" \
+            --arg total_time   "$total_time" \
+            --argjson results  "$results" \
             '{
               skill:        $skill,
               model:        $model,
@@ -236,7 +242,9 @@ jobs:
               pass_rate:    $pass_rate,
               passed:       $passed,
               total:        $total,
-              total_tokens: $total_tokens
+              total_tokens: $total_tokens,
+              total_time:   $total_time,
+              results:      $results
             }' \
             > "/tmp/eval-results/${skill_name}__${safe_model}__${mode}.json"
 
@@ -435,6 +443,8 @@ jobs:
                   skill_rate=$(echo "$skill_row" | jq -r '.pass_rate // ""')
                   skill_pass=$(echo "$skill_row" | jq -r '.passed    // ""')
                   skill_tot=$(echo "$skill_row"  | jq -r '.total     // ""')
+                  skill_tokens=$(echo "$skill_row" | jq -r '.total_tokens // ""')
+                  skill_time=$(echo "$skill_row"   | jq -r '.total_time   // ""')
 
                   if [ -n "$skill_rate" ] && [ "$skill_rate" != "" ]; then
                     if awk "BEGIN {exit !($skill_rate >= $PASS_THRESHOLD)}"; then
@@ -450,6 +460,32 @@ jobs:
 
                   echo "### ${eval_icon} \`${model}\`: ${eval_header}"
                   echo ""
+
+                  # Per-case breakdown table
+                  results=$(echo "$skill_row" | jq -r '.results // [] | length')
+                  if [ "$results" -gt 0 ] 2>/dev/null; then
+                    token_fmt="—"
+                    if [ -n "$skill_tokens" ] && [ "$skill_tokens" != "" ]; then
+                      token_fmt=$(printf '%s' "$skill_tokens" | sed ':a;s/\B[0-9]\{3\}\b/,&/;ta')
+                    fi
+                    time_fmt="${skill_time:-—}s"
+                    echo "**Pass rate: ${skill_pass}/${skill_tot} (${skill_rate}%)** | Time: ${time_fmt} | Tokens: ${token_fmt}"
+                    echo ""
+                    echo "| # | Case | Status | Criteria | Time | Tokens |"
+                    echo "|---|------|--------|:--------:|-----:|-------:|"
+                    echo "$skill_row" | jq -r '.results[] | [
+                      .name,
+                      (if .criteria_passed == .criteria_total and .status == "completed" then "PASS" else "FAIL" end),
+                      "\(.criteria_passed)/\(.criteria_total)",
+                      "\(.elapsed)s",
+                      (.tokens | tostring)
+                    ] | @tsv' | awk -F'\t' 'BEGIN{i=1} {
+                      status = ($2 == "PASS") ? "PASS" : "FAIL"
+                      printf "| %d | %s | %s | %s | %s | %s |\n", i, $1, status, $3, $4, $5
+                      i++
+                    }'
+                    echo ""
+                  fi
                 done
               fi
 
