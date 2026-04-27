@@ -439,7 +439,8 @@ jobs:
               # ── Per-model eval detail ────────────────────────────────────
               if [ -n "$models" ]; then
                 echo "$models" | while IFS= read -r model; do
-                  skill_row=$(echo "$skill_evals" | jq -r --arg m "$model" --arg mode "skill" '.[] | select(.model == $m and .mode == $mode)')
+                  skill_row=$(echo "$skill_evals" | jq -r --arg m "$model" --arg mode "skill"    '.[] | select(.model == $m and .mode == $mode)')
+                  base_row=$(echo "$skill_evals"  | jq -r --arg m "$model" --arg mode "baseline" '.[] | select(.model == $m and .mode == $mode)')
                   skill_rate=$(echo "$skill_row" | jq -r '.pass_rate // ""')
                   skill_pass=$(echo "$skill_row" | jq -r '.passed    // ""')
                   skill_tot=$(echo "$skill_row"  | jq -r '.total     // ""')
@@ -461,31 +462,43 @@ jobs:
                   echo "### ${eval_icon} \`${model}\`: ${eval_header}"
                   echo ""
 
-                  # Per-case breakdown table
-                  results=$(echo "$skill_row" | jq -r '.results // [] | length')
-                  if [ "$results" -gt 0 ] 2>/dev/null; then
-                    token_fmt="—"
-                    if [ -n "$skill_tokens" ] && [ "$skill_tokens" != "" ]; then
-                      token_fmt=$(printf '%s' "$skill_tokens" | sed ':a;s/\B[0-9]\{3\}\b/,&/;ta')
+                  # Helper to render a case breakdown table for a given row
+                  render_case_table() {
+                    local row="$1" label="$2"
+                    local rate pass tot tokens time n
+                    rate=$(echo "$row"   | jq -r '.pass_rate    // ""')
+                    pass=$(echo "$row"   | jq -r '.passed       // ""')
+                    tot=$(echo "$row"    | jq -r '.total        // ""')
+                    tokens=$(echo "$row" | jq -r '.total_tokens // ""')
+                    time=$(echo "$row"   | jq -r '.total_time   // ""')
+                    n=$(echo "$row"      | jq -r '.results // [] | length')
+
+                    if [ "$n" -gt 0 ] 2>/dev/null; then
+                      local token_fmt="—"
+                      if [ -n "$tokens" ] && [ "$tokens" != "" ]; then
+                        token_fmt=$(printf '%s' "$tokens" | sed ':a;s/\B[0-9]\{3\}\b/,&/;ta')
+                      fi
+                      echo "**${label} — Pass rate: ${pass}/${tot} (${rate}%)** | Time: ${time:-—}s | Tokens: ${token_fmt}"
+                      echo ""
+                      echo "| # | Case | Status | Criteria | Time | Tokens |"
+                      echo "|---|------|--------|:--------:|-----:|-------:|"
+                      echo "$row" | jq -r '.results[] | [
+                        .name,
+                        (if .criteria_passed == .criteria_total and .status == "completed" then "PASS" else "FAIL" end),
+                        "\(.criteria_passed)/\(.criteria_total)",
+                        "\(.elapsed)s",
+                        (.tokens | tostring)
+                      ] | @tsv' | awk -F'\t' 'BEGIN{i=1} {
+                        status = ($2 == "PASS") ? "PASS" : "FAIL"
+                        printf "| %d | %s | %s | %s | %s | %s |\n", i, $1, status, $3, $4, $5
+                        i++
+                      }'
+                      echo ""
                     fi
-                    time_fmt="${skill_time:-—}s"
-                    echo "**Pass rate: ${skill_pass}/${skill_tot} (${skill_rate}%)** | Time: ${time_fmt} | Tokens: ${token_fmt}"
-                    echo ""
-                    echo "| # | Case | Status | Criteria | Time | Tokens |"
-                    echo "|---|------|--------|:--------:|-----:|-------:|"
-                    echo "$skill_row" | jq -r '.results[] | [
-                      .name,
-                      (if .criteria_passed == .criteria_total and .status == "completed" then "PASS" else "FAIL" end),
-                      "\(.criteria_passed)/\(.criteria_total)",
-                      "\(.elapsed)s",
-                      (.tokens | tostring)
-                    ] | @tsv' | awk -F'\t' 'BEGIN{i=1} {
-                      status = ($2 == "PASS") ? "PASS" : "FAIL"
-                      printf "| %d | %s | %s | %s | %s | %s |\n", i, $1, status, $3, $4, $5
-                      i++
-                    }'
-                    echo ""
-                  fi
+                  }
+
+                  render_case_table "$skill_row" "Skill"
+                  render_case_table "$base_row"  "Baseline"
                 done
               fi
 
