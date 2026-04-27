@@ -172,6 +172,7 @@ jobs:
       matrix:
         skill: ${{ fromJSON(needs.discover.outputs.eval-skills) }}
         model: ${{ fromJSON(needs.list-models.outputs.models) }}
+        mode: [skill, baseline]
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
@@ -193,16 +194,18 @@ jobs:
           upload-viewer: 'true'
           post-comment: 'false'
           write-summary: 'false'
+          baseline: ${{ matrix.mode == 'baseline' }}
 
       - name: Save eval JSON
         if: always()
         env:
-          PASS_RATE: ${{ steps.evaluate.outputs.pass_rate }}
+          PASS_RATE: ${{ steps.evaluate.outputs.pass-rate }}
           PASSED: ${{ steps.evaluate.outputs.passed }}
           TOTAL: ${{ steps.evaluate.outputs.total }}
         run: |
           skill_name='${{ steps.skill-name.outputs.value }}'
           model_name='${{ matrix.model }}'
+          mode='${{ matrix.mode }}'
           safe_model=$(echo "$model_name" | tr '/: ' '---')
           mkdir -p /tmp/eval-results
 
@@ -221,6 +224,7 @@ jobs:
           jq -n \
             --arg skill        "$skill_name" \
             --arg model        "$model_name" \
+            --arg mode         "$mode" \
             --arg pass_rate    "$pass_rate" \
             --arg passed       "$passed" \
             --arg total        "$total" \
@@ -228,18 +232,19 @@ jobs:
             '{
               skill:        $skill,
               model:        $model,
+              mode:         $mode,
               pass_rate:    $pass_rate,
               passed:       $passed,
               total:        $total,
               total_tokens: $total_tokens
             }' \
-            > "/tmp/eval-results/${skill_name}__${safe_model}.json"
+            > "/tmp/eval-results/${skill_name}__${safe_model}__${mode}.json"
 
       - name: Upload eval JSON
         if: always()
         uses: actions/upload-artifact@v7.0.1
         with:
-          name: eval-result--${{ steps.skill-name.outputs.value }}--${{ matrix.model }}
+          name: eval-result--${{ steps.skill-name.outputs.value }}--${{ matrix.model }}--${{ matrix.mode }}
           path: /tmp/eval-results/
           retention-days: 1
 
@@ -356,35 +361,69 @@ jobs:
               # ── Eval Results table ───────────────────────────────────────
               echo "## 📊 Eval Results"
               echo ""
-              echo "| Model | Pass Rate | Tokens Used |"
-              echo "|-------|:---------:|------------:|"
+              echo "| Model | Skill | Baseline | Δ | Tokens Used (skill) |"
+              echo "|-------|:-----:|:--------:|:-:|--------------------:|"
 
               if [ -n "$models" ]; then
                 echo "$models" | while IFS= read -r model; do
-                  eval_row=$(echo "$skill_evals" | jq -r --arg m "$model" '.[] | select(.model == $m)')
-                  pass_rate=$(echo "$eval_row"     | jq -r '.pass_rate    // ""')
-                  passed=$(echo "$eval_row"        | jq -r '.passed       // ""')
-                  total=$(echo "$eval_row"         | jq -r '.total        // ""')
-                  total_tokens=$(echo "$eval_row"  | jq -r '.total_tokens // ""')
+                  skill_row=$(echo "$skill_evals" | jq -r --arg m "$model" --arg mode "skill"    '.[] | select(.model == $m and .mode == $mode)')
+                  base_row=$(echo "$skill_evals"  | jq -r --arg m "$model" --arg mode "baseline" '.[] | select(.model == $m and .mode == $mode)')
 
-                  if [ -n "$pass_rate" ] && [ "$pass_rate" != "" ]; then
-                    if awk "BEGIN {exit !($pass_rate >= $PASS_THRESHOLD)}"; then
-                      eval_cell="✅ ${pass_rate}% (${passed}/${total})"
+                  skill_rate=$(echo "$skill_row" | jq -r '.pass_rate    // ""')
+                  skill_pass=$(echo "$skill_row" | jq -r '.passed       // ""')
+                  skill_tot=$(echo "$skill_row"  | jq -r '.total        // ""')
+                  base_rate=$(echo "$base_row"   | jq -r '.pass_rate    // ""')
+                  base_pass=$(echo "$base_row"   | jq -r '.passed       // ""')
+                  base_tot=$(echo "$base_row"    | jq -r '.total        // ""')
+                  total_tokens=$(echo "$skill_row" | jq -r '.total_tokens // ""')
+
+                  # Skill cell
+                  if [ -n "$skill_rate" ] && [ "$skill_rate" != "" ]; then
+                    if awk "BEGIN {exit !($skill_rate >= $PASS_THRESHOLD)}"; then
+                      skill_cell="✅ ${skill_rate}% (${skill_pass}/${skill_tot})"
                     else
-                      eval_cell="❌ ${pass_rate}% (${passed}/${total})"
+                      skill_cell="❌ ${skill_rate}% (${skill_pass}/${skill_tot})"
                     fi
                   else
-                    eval_cell="—"
+                    skill_cell="—"
                   fi
+
+                  # Baseline cell
+                  if [ -n "$base_rate" ] && [ "$base_rate" != "" ]; then
+                    if awk "BEGIN {exit !($base_rate >= $PASS_THRESHOLD)}"; then
+                      base_cell="✅ ${base_rate}% (${base_pass}/${base_tot})"
+                    else
+                      base_cell="❌ ${base_rate}% (${base_pass}/${base_tot})"
+                    fi
+                  else
+                    base_cell="—"
+                  fi
+
+                  # Delta cell
+                  if [ -n "$skill_rate" ] && [ -n "$base_rate" ] && [ "$skill_rate" != "" ] && [ "$base_rate" != "" ]; then
+                    delta=$(awk "BEGIN {printf \"%.1f\", $skill_rate - $base_rate}")
+                    if awk "BEGIN {exit !($delta > 0)}"; then
+                      delta_cell="+${delta}%"
+                    elif awk "BEGIN {exit !($delta < 0)}"; then
+                      delta_cell="${delta}%"
+                    else
+                      delta_cell="0%"
+                    fi
+                  else
+                    delta_cell="—"
+                  fi
+
+                  # Token cell
                   if [ -n "$total_tokens" ] && [ "$total_tokens" != "" ]; then
                     token_cell=$(printf '%s' "$total_tokens" | sed ':a;s/\B[0-9]\{3\}\b/,&/;ta')
                   else
                     token_cell="—"
                   fi
-                  echo "| \`${model}\` | ${eval_cell} | ${token_cell} |"
+
+                  echo "| \`${model}\` | ${skill_cell} | ${base_cell} | ${delta_cell} | ${token_cell} |"
                 done
               else
-                echo "| — | No evals | — |"
+                echo "| — | No evals | — | — | — |"
               fi
 
               echo ""
@@ -392,14 +431,18 @@ jobs:
               # ── Per-model eval detail ────────────────────────────────────
               if [ -n "$models" ]; then
                 echo "$models" | while IFS= read -r model; do
-                  eval_row=$(echo "$skill_evals" | jq -r --arg m "$model" '.[] | select(.model == $m)')
-                  pass_rate=$(echo "$eval_row" | jq -r '.pass_rate // ""')
-                  passed=$(echo "$eval_row"    | jq -r '.passed    // ""')
-                  total=$(echo "$eval_row"     | jq -r '.total     // ""')
+                  skill_row=$(echo "$skill_evals" | jq -r --arg m "$model" --arg mode "skill" '.[] | select(.model == $m and .mode == $mode)')
+                  skill_rate=$(echo "$skill_row" | jq -r '.pass_rate // ""')
+                  skill_pass=$(echo "$skill_row" | jq -r '.passed    // ""')
+                  skill_tot=$(echo "$skill_row"  | jq -r '.total     // ""')
 
-                  if [ -n "$pass_rate" ] && [ "$pass_rate" != "" ]; then
-                    eval_icon="✅"
-                    eval_header="${pass_rate}% (${passed}/${total})"
+                  if [ -n "$skill_rate" ] && [ "$skill_rate" != "" ]; then
+                    if awk "BEGIN {exit !($skill_rate >= $PASS_THRESHOLD)}"; then
+                      eval_icon="✅"
+                    else
+                      eval_icon="❌"
+                    fi
+                    eval_header="${skill_rate}% (${skill_pass}/${skill_tot})"
                   else
                     eval_icon="—"
                     eval_header="No evals"
