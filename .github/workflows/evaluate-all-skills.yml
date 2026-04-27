@@ -361,10 +361,10 @@ jobs:
               # ── Eval Results table ───────────────────────────────────────
               echo "## 📊 Eval Results"
               echo ""
-              echo "| Model | Skill | Baseline | Δ | Tokens Used (skill) |"
-              echo "|-------|:-----:|:--------:|:-:|--------------------:|"
 
               if [ -n "$models" ]; then
+                echo "| Model | Skill | Baseline | Δ | Tokens Used (skill) |"
+                echo "|-------|:-----:|:--------:|:-:|--------------------:|"
                 echo "$models" | while IFS= read -r model; do
                   skill_row=$(echo "$skill_evals" | jq -r --arg m "$model" --arg mode "skill"    '.[] | select(.model == $m and .mode == $mode)')
                   base_row=$(echo "$skill_evals"  | jq -r --arg m "$model" --arg mode "baseline" '.[] | select(.model == $m and .mode == $mode)')
@@ -423,7 +423,7 @@ jobs:
                   echo "| \`${model}\` | ${skill_cell} | ${base_cell} | ${delta_cell} | ${token_cell} |"
                 done
               else
-                echo "| — | No evals | — | — | — |"
+                echo "No evals"
               fi
 
               echo ""
