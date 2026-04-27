@@ -184,6 +184,7 @@ jobs:
           pass-threshold: '80'
           upload-viewer: 'true'
           post-comment: 'false'
+          write-summary: 'false'
 
       - name: Save eval JSON
         if: always()
