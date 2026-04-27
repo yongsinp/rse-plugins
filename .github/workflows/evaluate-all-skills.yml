@@ -199,18 +199,28 @@ jobs:
           passed=$(grep '^passed='    "$GITHUB_OUTPUT" | tail -1 | cut -d= -f2 || echo '')
           total=$(grep '^total='     "$GITHUB_OUTPUT" | tail -1 | cut -d= -f2 || echo '')
 
+          # Read token usage from summary.json written by skill-eval-action
+          summary_file="$RUNNER_TEMP/skill-eval/${skill_name}/summary.json"
+          if [ -f "$summary_file" ]; then
+            total_tokens=$(jq -r '.total_tokens // ""' "$summary_file")
+          else
+            total_tokens=''
+          fi
+
           jq -n \
-            --arg skill     "$skill_name" \
-            --arg model     "$model_name" \
-            --arg pass_rate "$pass_rate" \
-            --arg passed    "$passed" \
-            --arg total     "$total" \
+            --arg skill        "$skill_name" \
+            --arg model        "$model_name" \
+            --arg pass_rate    "$pass_rate" \
+            --arg passed       "$passed" \
+            --arg total        "$total" \
+            --arg total_tokens "$total_tokens" \
             '{
-              skill:     $skill,
-              model:     $model,
-              pass_rate: $pass_rate,
-              passed:    $passed,
-              total:     $total
+              skill:        $skill,
+              model:        $model,
+              pass_rate:    $pass_rate,
+              passed:       $passed,
+              total:        $total,
+              total_tokens: $total_tokens
             }' \
             > "/tmp/eval-results/${skill_name}__${safe_model}.json"
 
@@ -335,25 +345,31 @@ jobs:
               # ── Eval Results table ───────────────────────────────────────
               echo "## Eval Results"
               echo ""
-              echo "| Model | Pass Rate |"
-              echo "|-------|:---------:|"
+              echo "| Model | Pass Rate | Tokens |"
+              echo "|-------|:---------:|-------:|"
 
               if [ -n "$models" ]; then
                 echo "$models" | while IFS= read -r model; do
                   eval_row=$(echo "$skill_evals" | jq -r --arg m "$model" '.[] | select(.model == $m)')
-                  pass_rate=$(echo "$eval_row" | jq -r '.pass_rate // ""')
-                  passed=$(echo "$eval_row"    | jq -r '.passed    // ""')
-                  total=$(echo "$eval_row"     | jq -r '.total     // ""')
+                  pass_rate=$(echo "$eval_row"     | jq -r '.pass_rate    // ""')
+                  passed=$(echo "$eval_row"        | jq -r '.passed       // ""')
+                  total=$(echo "$eval_row"         | jq -r '.total        // ""')
+                  total_tokens=$(echo "$eval_row"  | jq -r '.total_tokens // ""')
 
                   if [ -n "$pass_rate" ] && [ "$pass_rate" != "" ]; then
                     eval_cell="${pass_rate}% (${passed}/${total})"
                   else
                     eval_cell="—"
                   fi
-                  echo "| \`${model}\` | ${eval_cell} |"
+                  if [ -n "$total_tokens" ] && [ "$total_tokens" != "" ]; then
+                    token_cell=$(printf '%s' "$total_tokens" | sed ':a;s/\B[0-9]\{3\}\b/,&/;ta')
+                  else
+                    token_cell="—"
+                  fi
+                  echo "| \`${model}\` | ${eval_cell} | ${token_cell} |"
                 done
               else
-                echo "| — | No evals |"
+                echo "| — | No evals | — |"
               fi
 
               echo ""
