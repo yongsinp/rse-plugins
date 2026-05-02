@@ -1,8 +1,0 @@
-name: Set up pre-commit hooks
-prompt: How do I configure pre-commit hooks to run ruff and mypy before each git commit?
-criteria:
-- Shows or describes a .pre-commit-config.yaml file structure
-- Includes ruff hook (e.g., from charliermarsh/ruff-pre-commit)
-- Includes mypy hook
-expect_skill: true
-timeout: 120
