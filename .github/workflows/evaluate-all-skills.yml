@@ -73,8 +73,6 @@ jobs:
       - name: Review SKILL.md
         continue-on-error: true
         id: review
-        env:
-          ANTHROPIC_BASE_URL: ${{ secrets.LITELLM_PROXY_URL }}
         run: |
           set +e
           output=$(tessl skill review ${{ matrix.skill }} --threshold ${{ env.PASS_THRESHOLD }} 2>&1)
@@ -185,6 +183,7 @@ jobs:
         uses: yongsinp/skill-eval-action@feature/model_change
         env:
           ANTHROPIC_BASE_URL: ${{ secrets.LITELLM_PROXY_URL }}
+          CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS: 1
         with:
           skill-name: ${{ steps.skill-name.outputs.value }}
           skill-path: ${{ matrix.skill }}
