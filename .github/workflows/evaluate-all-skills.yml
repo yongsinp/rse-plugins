@@ -15,10 +15,13 @@ jobs:
       models: ${{ steps.list.outputs.models }}
       count: ${{ steps.list.outputs.count }}
     steps:
-      - name: Set fixed models for testing
+      - name: Fetch available models from LiteLLM proxy
         id: list
         run: |
-          models='["claude-sonnet-4-6","claude-haiku-4-5-20251001"]'
+          response=$(curl -fsSL \
+            -H "Authorization: Bearer ${{ secrets.LITELLM_API_KEY }}" \
+            "${{ secrets.LITELLM_PROXY_URL }}/v1/models")
+          models=$(echo "$response" | jq -c '[.data[].id] | sort')
           echo "models=$models" >> "$GITHUB_OUTPUT"
           echo "count=$(echo "$models" | jq length)" >> "$GITHUB_OUTPUT"
 
