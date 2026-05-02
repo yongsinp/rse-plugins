@@ -180,14 +180,16 @@ jobs:
 
       - name: Evaluate skill
         id: evaluate
-        uses: yongsinp/skill-eval-action@feature/model_change
+        uses: yongsinp/skill-eval-action@main
         env:
-          ANTHROPIC_BASE_URL: ${{ secrets.LITELLM_PROXY_URL }}
-          CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS: 1
+          COPILOT_PROVIDER_BASE_URL: ${{ secrets.LITELLM_PROXY_URL }}
+          COPILOT_PROVIDER_TYPE: openai
+          COPILOT_PROVIDER_API_KEY: ${{ secrets.LITELLM_API_KEY }}
+          COPILOT_MODEL: ${{ matrix.model }}
         with:
           skill-name: ${{ steps.skill-name.outputs.value }}
           skill-path: ${{ matrix.skill }}
-          anthropic-api-key: ${{ secrets.LITELLM_API_KEY }}
+          api-key: ${{ secrets.LITELLM_API_KEY }}
           model: ${{ matrix.model }}
           pass-threshold: ${{ env.PASS_THRESHOLD }}
           upload-viewer: 'true'
