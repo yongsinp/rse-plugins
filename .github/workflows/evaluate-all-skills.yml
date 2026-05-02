@@ -3,6 +3,9 @@ on: workflow_dispatch
 
 env:
   PASS_THRESHOLD: '80'
+  TEST_REPO: uw-ssec/rse-plugins-testcases
+  TEST_BRANCH: main
+  TEST_DIR: .testcases
 
 permissions:
   contents: read
@@ -40,6 +43,21 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Checkout evals testcases
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          repository: ${{ env.TEST_REPO }}
+          ref: ${{ env.TEST_BRANCH }}
+          path: ${{ env.TEST_DIR }}
+          persist-credentials: false
+          # If the testcases repo is private, set RSE_TESTCASES_TOKEN (fine-grained PAT with Contents: Read).
+          # Otherwise the workflow will fall back to GITHUB_TOKEN (only works for the same repo or public repos).
+          token: ${{ secrets.TEST_REPO_TOKEN || secrets.GITHUB_TOKEN }}
+          sparse-checkout: |
+            plugins/**/skills/**/evals
+            community-plugins/**/skills/**/evals
+          sparse-checkout-cone-mode: false
+
       - name: Discover all skills
         id: discover
         run: |
@@ -47,7 +65,7 @@ jobs:
           echo "all-skills=$all" >> "$GITHUB_OUTPUT"
           echo "count=$(echo $all | jq length)" >> "$GITHUB_OUTPUT"
 
-          eval_skills=$(find plugins community-plugins -name "SKILL.md" -exec dirname {} \; | sort -u | while read -r d; do [ -d "$d/evals" ] && echo "$d"; done | jq -R -s -c 'split("\n") | map(select(. != ""))')
+          eval_skills=$(find "${{ env.TEST_DIR }}/plugins" "${{ env.TEST_DIR }}/community-plugins" -type d -name "evals" | sed "s|^${{ env.TEST_DIR }}/||" | sed 's|/evals$||' | sort -u | jq -R -s -c 'split("\n") | map(select(. != ""))')
           echo "eval-skills=$eval_skills" >> "$GITHUB_OUTPUT"
           echo "eval-count=$(echo $eval_skills | jq length)" >> "$GITHUB_OUTPUT"
 
@@ -176,6 +194,31 @@ jobs:
         mode: [skill, baseline]
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Checkout evals for skill
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          repository: ${{ env.TEST_REPO }}
+          ref: ${{ env.TEST_BRANCH }}
+          path: ${{ env.TEST_DIR }}
+          persist-credentials: false
+          # If the testcases repo is private, set RSE_TESTCASES_TOKEN (fine-grained PAT with Contents: Read).
+          # Otherwise the workflow will fall back to GITHUB_TOKEN (only works for the same repo or public repos).
+          token: ${{ secrets.TEST_REPO_TOKEN || secrets.GITHUB_TOKEN }}
+          sparse-checkout: |
+            ${{ matrix.skill }}/evals
+          sparse-checkout-cone-mode: false
+
+      - name: Sync evals into skill directory
+        run: |
+          source_dir="${{ env.TEST_DIR }}/${{ matrix.skill }}/evals"
+          dest_dir="${{ matrix.skill }}/evals"
+          if [ -d "$source_dir" ]; then
+            mkdir -p "$dest_dir"
+            cp -R "$source_dir"/. "$dest_dir"/
+          else
+            echo "No evals found for ${{ matrix.skill }}"
+          fi
 
       - name: Derive skill name
         id: skill-name
