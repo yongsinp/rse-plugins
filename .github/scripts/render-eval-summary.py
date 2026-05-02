@@ -187,8 +187,8 @@ def render_skill(skill: str, review: dict, skill_evals: list[dict], threshold: i
         lines += ["No evals", ""]
     else:
         lines += [
-            "| Model | Skill | Baseline | Δ | Tokens Used (skill) |",
-            "|-------|:-----:|:--------:|:-:|--------------------:|",
+            "| Model | Baseline | Skill | Δ | Tokens Used (skill) |",
+            "|-------|:--------:|:-----:|:-:|--------------------:|",
         ]
         for model in models:
             s_row = next(
@@ -221,7 +221,7 @@ def render_skill(skill: str, review: dict, skill_evals: list[dict], threshold: i
             )
             d_cell = format_delta_cell(s_row.get("pass_rate", ""), b_row.get("pass_rate", ""))
             tk_cell = format_token_count(s_row.get("total_tokens", ""))
-            lines.append(f"| `{model}` | {s_cell} | {b_cell} | {d_cell} | {tk_cell} |")
+            lines.append(f"| `{model}` | {b_cell} | {s_cell} | {d_cell} | {tk_cell} |")
 
         lines.append("")
 
