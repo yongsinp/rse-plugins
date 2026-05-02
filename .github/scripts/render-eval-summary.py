@@ -249,9 +249,13 @@ def render_skill(skill: str, review: dict, skill_evals: list[dict], threshold: i
             s_total = s_row.get("total", "")
             header = f"{s_rate}% ({s_pass}/{s_total})" if s_rate else "No evals"
 
-            lines += [f"### `{model}`: {header}", ""]
+            lines += [
+                f"<details><summary><code>{model}</code>: {header}</summary>",
+                "",
+            ]
             lines += render_case_table(s_row, "Skill")
             lines += render_case_table(b_row, "Baseline")
+            lines += ["</details>", ""]
 
     return lines
 
