@@ -189,13 +189,14 @@ jobs:
       matrix:
         model: ${{ fromJSON(needs.list-models.outputs.models) }}
     uses: ./.github/workflows/evaluate-per-model.yml
+    # env context is unavailable in reusable workflow `with` blocks; values duplicated from top-level env.
     with:
       model: ${{ matrix.model }}
       skills: ${{ needs.discover.outputs.eval-skills }}
-      pass-threshold: ${{ env.PASS_THRESHOLD }}
-      test-repo: ${{ env.TEST_REPO }}
-      test-branch: ${{ env.TEST_BRANCH }}
-      test-dir: ${{ env.TEST_DIR }}
+      pass-threshold: '80'
+      test-repo: uw-ssec/rse-plugins-testcases
+      test-branch: main
+      test-dir: .testcases
     secrets: inherit
 
   summarize:
