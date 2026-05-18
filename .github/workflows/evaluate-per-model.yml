@@ -20,6 +20,10 @@ on:
       test-dir:
         required: true
         type: string
+      sleep-seconds:
+        required: false
+        type: number
+        default: 0
 
 jobs:
   evaluate:
@@ -60,6 +64,10 @@ jobs:
       - name: Derive skill name
         id: skill-name
         run: echo "value=$(basename '${{ matrix.skill }}')" >> "$GITHUB_OUTPUT"
+
+      - name: Sleep before evaluation
+        if: inputs.sleep-seconds > 0
+        run: sleep ${{ inputs.sleep-seconds }}
 
       - name: Evaluate skill
         id: evaluate
