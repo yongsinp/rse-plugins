@@ -197,7 +197,7 @@ jobs:
       test-repo: uw-ssec/rse-plugins-testcases
       test-branch: main
       test-dir: .testcases
-      sleep-seconds: 30
+      sleep-seconds: 300
     secrets: inherit
 
   summarize:
