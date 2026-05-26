@@ -20,9 +20,13 @@ triggers correctly and produces quality output.
 
 ## Eval YAML format
 
+Always use a YAML block scalar (`|`) for the `prompt` field — prompts often contain
+colons, JSON, or quotes that break inline YAML values.
+
 ```yaml
 name: <Short human-readable name>
-prompt: <Realistic user message that would trigger (or not) the skill>
+prompt: |
+  <Realistic user message that would trigger (or not) the skill>
 criteria:
   - <Specific, verifiable assertion about the response>
   - <Another specific assertion>
@@ -39,7 +43,7 @@ timeout: 600         # use 30 for the negative-trigger case
   Bad:  "Output follows best practices"
 - Prompts must sound like a real developer wrote them, not like a test case.
 - The negative-trigger prompt should be plausibly related but clearly outside scope.
-- Files must be sequentially numbered starting at 001. The last file in the returned array must be the negative-trigger case.
+- Files must be sequentially numbered starting at 001. The last file must be the negative-trigger case, named `NNN-negative-trigger.yaml`.
 
 ## Output format
 
