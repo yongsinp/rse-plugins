@@ -50,7 +50,7 @@ jobs:
           ref: ${{ env.TEST_BRANCH }}
           path: ${{ env.TEST_DIR }}
           persist-credentials: false
-          # If the testcases repo is private, set RSE_TESTCASES_TOKEN (fine-grained PAT with Contents: Read).
+          # If the testcases repo is private, set TEST_REPO_TOKEN (fine-grained PAT with Contents: Read).
           # Otherwise the workflow will fall back to GITHUB_TOKEN (only works for the same repo or public repos).
           token: ${{ secrets.TEST_REPO_TOKEN || secrets.GITHUB_TOKEN }}
           sparse-checkout: |
