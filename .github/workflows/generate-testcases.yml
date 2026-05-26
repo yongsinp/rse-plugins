@@ -7,7 +7,7 @@ on:
       - 'community-plugins/**/SKILL.md'
 
 env:
-  TESTCASES_REPO: ${{ github.repository_owner }}/rse-plugins-testcases
+  TESTCASES_REPO: uw-ssec/rse-plugins-testcases
   GENERATION_MODEL: claude-sonnet-4-6
 
 jobs:
