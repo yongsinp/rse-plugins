@@ -118,9 +118,7 @@ jobs:
               --base main \
               --head "$BRANCH" \
               --title "testcases: ${PR_TITLE}" \
-              --body "Automatically generated testcases for ${PR_URL}.
-
-Review and adjust the generated cases before merging."
+              --body "Automatically generated testcases for ${PR_URL}. Review and adjust the generated cases before merging."
           else
             echo "PR #${existing} already exists for branch ${BRANCH}; branch updated"
           fi
