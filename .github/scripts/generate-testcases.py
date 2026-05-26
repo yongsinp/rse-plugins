@@ -133,6 +133,7 @@ def main() -> None:
     skill_root = Path(args.skill_root)
     output_root = Path(args.output_dir)
     errors: list[tuple[str, str]] = []
+    warnings: list[str] = []
 
     for skill_path in skills:
         print(f"\nGenerating testcases for: {skill_path}")
@@ -152,11 +153,16 @@ def main() -> None:
             try:
                 validate_testcase(content, filename)
             except Exception as exc:
-                print(f"  SKIPPED {filename}: {exc}", file=sys.stderr)
-                continue
+                msg = f"{filename}: {exc}"
+                print(f"  WARNING {msg} (written anyway)", file=sys.stderr)
+                warnings.append(msg)
             out_file = evals_dir / filename
             out_file.write_text(content)
             print(f"  Written: {out_file}")
+
+    if warnings:
+        warnings_file = output_root / ".validation-warnings"
+        warnings_file.write_text("\n".join(warnings) + "\n")
 
     if errors:
         print(f"\n{len(errors)} skill(s) failed generation:", file=sys.stderr)

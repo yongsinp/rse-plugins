@@ -113,13 +113,21 @@ jobs:
             --json number \
             --jq '.[0].number')
 
+          BODY=$(printf 'Automatically generated testcases for %s.\n\nReview and adjust the generated cases before merging.' "$PR_URL")
+          if [ -f "../generated-testcases/.validation-warnings" ]; then
+            BODY="${BODY}$(printf '\n\n**Validation warnings** (these files may need manual fixes):\n')"
+            while IFS= read -r line; do
+              BODY="${BODY}$(printf '\n- %s' "$line")"
+            done < "../generated-testcases/.validation-warnings"
+          fi
+
           if [ -z "$existing" ]; then
             gh pr create \
               --repo "${{ env.TESTCASES_REPO }}" \
               --base main \
               --head "$BRANCH" \
               --title "testcases: ${PR_TITLE}" \
-              --body "Automatically generated testcases for ${PR_URL}. Review and adjust the generated cases before merging."
+              --body "$BODY"
           else
             echo "PR #${existing} already exists for branch ${BRANCH}; branch updated"
           fi
