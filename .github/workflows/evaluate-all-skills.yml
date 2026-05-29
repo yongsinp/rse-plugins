@@ -3,7 +3,7 @@ on: workflow_dispatch
 
 env:
   PASS_THRESHOLD: '80'
-  TEST_REPO: uw-ssec/rse-plugins-testcases
+  TEST_REPO: ${{ github.repository_owner }}/rse-plugins-testcases
   TEST_BRANCH: main
   TEST_DIR: .testcases
 
@@ -194,7 +194,7 @@ jobs:
       model: ${{ matrix.model }}
       skills: ${{ needs.discover.outputs.eval-skills }}
       pass-threshold: '80'
-      test-repo: uw-ssec/rse-plugins-testcases
+      test-repo: ${{ github.repository_owner }}/rse-plugins-testcases
       test-branch: main
       test-dir: .testcases
       sleep-seconds: 300
