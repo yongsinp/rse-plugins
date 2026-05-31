@@ -65,10 +65,6 @@ jobs:
         id: skill-name
         run: echo "value=$(basename '${{ matrix.skill }}')" >> "$GITHUB_OUTPUT"
 
-      - name: Sleep before evaluation
-        if: inputs.sleep-seconds > 0
-        run: sleep ${{ inputs.sleep-seconds }}
-
       - name: Evaluate skill
         id: evaluate
         uses: yongsinp/skill-eval-action@main
@@ -87,6 +83,10 @@ jobs:
           post-comment: 'false'
           write-summary: 'false'
           baseline: ${{ matrix.mode == 'baseline' }}
+
+      - name: Sleep after evaluation
+        if: inputs.sleep-seconds > 0
+        run: sleep ${{ inputs.sleep-seconds }}
 
       - name: Save eval JSON
         if: always()
