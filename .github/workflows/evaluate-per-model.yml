@@ -96,6 +96,7 @@ jobs:
           TOTAL: ${{ steps.evaluate.outputs.total }}
         run: |
           skill_name='${{ steps.skill-name.outputs.value }}'
+          skill_path='${{ matrix.skill }}'
           model_name='${{ inputs.model }}'
           mode='${{ matrix.mode }}'
           safe_model=$(echo "$model_name" | tr '/: ' '---')
@@ -118,7 +119,7 @@ jobs:
           fi
 
           jq -n \
-            --arg skill        "$skill_name" \
+            --arg skill        "$skill_path" \
             --arg model        "$model_name" \
             --arg mode         "$mode" \
             --arg pass_rate    "$pass_rate" \

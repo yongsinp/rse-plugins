@@ -145,13 +145,14 @@ jobs:
           JUDGE_BLOCK: ${{ steps.review.outputs.judge-block }}
         run: |
           skill_name='${{ steps.skill-name.outputs.value }}'
+          skill_path='${{ matrix.skill }}'
           mkdir -p /tmp/review-results
 
           printf '%s' "$VAL_BLOCK"   > /tmp/val_block.txt
           printf '%s' "$JUDGE_BLOCK" > /tmp/judge_block.txt
 
           jq -n \
-            --arg  skill       "$skill_name" \
+            --arg  skill       "$skill_path" \
             --arg  validation  '${{ steps.review.outputs.validation }}' \
             --arg  errors      '${{ steps.review.outputs.errors }}' \
             --arg  warnings    '${{ steps.review.outputs.warnings }}' \

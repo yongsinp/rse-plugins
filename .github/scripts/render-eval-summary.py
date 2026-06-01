@@ -121,12 +121,24 @@ def render_case_table(row: dict, label: str) -> list[str]:
     return lines
 
 
+def format_skill_label(skill: str) -> str:
+    """Format skill as 'plugin :: skill' when given a standard skill path."""
+    parts = [p for p in skill.split("/") if p]
+    # Expected: plugins/<plugin>/skills/<skill> or community-plugins/<plugin>/skills/<skill>
+    if len(parts) >= 4 and parts[2] == "skills":
+        plugin = parts[1]
+        skill_name = parts[3]
+        return f"{plugin} :: {skill_name}"
+    return skill
+
+
 def render_skill(skill: str, review: dict, skill_evals: list[dict], threshold: int) -> list[str]:
     """Return all Markdown lines for a single skill section."""
     lines: list[str] = []
 
     # Section header
-    lines += ["---", "", f"# {skill}", ""]
+    skill_label = format_skill_label(skill)
+    lines += ["---", "", f"# {skill_label}", ""]
 
     # Validation checks
     val = review.get("validation", "")
