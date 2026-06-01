@@ -1,15 +1,7 @@
 ---
 name: download-script-dev
-description: >
-  This skill should be used when the user asks to "develop a download script",
-  "debug data download", "fix download error", "create data pipeline template",
-  "download template", "GAIA data pipeline", "download from S3", "access Zarr store",
-  "cloud data access", or mentions specific data source names like "CONUS404", "HRRR",
-  "WRF", "PRISM", "Stage IV", "USGS", "ORNL", "DEM", "Synoptic", or "IRIS" in the
-  context of downloading or processing data. Provides templates, configuration
-  validation, and debugging guidance for hydroclimatological data download scripts
-  used in the GAIA project.
-version: 2026-03-20
+description: Use this skill when users ask to "develop a download script", "debug data download", "fix download error", "create data pipeline template", "download template", "GAIA data pipeline", "download from S3", "access Zarr store", "cloud data access", or mention sources like CONUS404, HRRR, WRF, PRISM, Stage IV, USGS, ORNL, DEM, Synoptic, or IRIS. Generates CONFIG-at-top Python download scripts, validates source-specific configuration (auth, endpoint/path, date range, variables, AOI/CRS, and output format), and diagnoses common failures (403/auth, timeout/retry, CRS mismatch, missing binaries, and partial downloads).
+version: 2026-05-31
 ---
 
 # Download Script Development Skill
@@ -18,19 +10,18 @@ version: 2026-03-20
 
 Assist in developing, refining, and debugging data download scripts for GAIA hydroclimatological data sources. This skill provides templates, configuration schemas, and troubleshooting guidance for building reproducible data pipelines across 10+ environmental data sources.
 
+## Use When
+
+- The user asks for a new download script or pipeline template for a GAIA source.
+- The user is debugging data download failures (auth 403, timeout, CRS mismatch, missing binaries, partial downloads).
+- The user needs help choosing access pattern/library for CONUS404, HRRR, WRF, PRISM, Stage IV, USGS, ORNL, DEM, Synoptic, or IRIS.
+- The user needs source-specific config validation before running a large download.
+
 ## Requirements
 
 - **Python 3.9+** with `xarray`, `geopandas`, `rioxarray`
 - **Source-specific libraries:** `herbie-data` (HRRR), `pyPRISMClimate` (PRISM), `obspy` (IRIS), `boto3` (WRF/S3), `elevation` (DEM), `s3fs` (CONUS404)
 - **System dependencies:** `wgrib2` for HRRR (install via conda-forge, not pip)
-
-## When to Use
-
-- Developing a new download script for a GAIA data source
-- Debugging an existing download script (timeouts, auth errors, CRS mismatches)
-- Adapting a notebook pattern to a new use case or study area
-- Validating download configuration parameters
-- Understanding which access pattern or library to use for a data source
 
 ## Script Structure Pattern
 
@@ -57,17 +48,47 @@ CONFIG = {
 # Download logic — generally no need to modify below this line
 # ============================================================
 
-def main():
-    # 1. Load AOI
-    aoi = gpd.read_file(CONFIG["aoi_path"])
+def validate_config(cfg):
+    required = ["source", "date_range", "variables", "output_path", "output_format"]
+    missing = [k for k in required if k not in cfg or cfg[k] in (None, "", [])]
+    if missing:
+        raise ValueError(f"Missing config keys: {missing}")
 
-    # 2. Download data (parallel)
-    # 3. Combine datasets
-    # 4. Spatial subset
-    # 5. Derive variables (if needed)
-    # 6. Save to output format
-    # 7. Print QC summary
-    pass
+
+def validate_aoi(aoi):
+    if aoi.empty:
+        raise ValueError("AOI is empty")
+    if aoi.crs is None:
+        raise ValueError("AOI CRS is missing")
+
+
+def main():
+    # 0. Validate configuration
+    validate_config(CONFIG)
+
+    # 1. Load + validate AOI
+    aoi = gpd.read_file(CONFIG["aoi_path"])
+    validate_aoi(aoi)
+
+    # 2. Download (parallel) with retry + failure capture
+    #    - collect failed items for a second pass
+    #    - fail hard only if failures remain after retries
+
+    # 3. Validate download completeness before combining
+    #    - check expected_count vs downloaded_count
+    #    - assert required variables are present
+
+    # 4. Combine datasets and validate dimensions/time coverage
+    #    - assert non-empty time axis
+
+    # 5. Reproject AOI if needed, spatial subset, validate bounds
+    #    - assert subset intersects AOI and is not empty
+
+    # 6. Derive variables (if requested) and validate units/ranges
+
+    # 7. Save output and verify artifact exists + can be reopened
+
+    # 8. Print QC summary (counts, date range, spatial bounds, failed items)
 
 if __name__ == "__main__":
     main()
@@ -77,19 +98,23 @@ if __name__ == "__main__":
 
 ### 1. Direct HTTP Download (PRISM, Stage IV, DEM)
 
-Simple URL-based fetching with `requests`. Use `ThreadPoolExecutor` for parallel downloads. Handle retries for network failures.
+Key differentiator: fixed file URLs with stateless downloads.
+Usage: `session.get(url, timeout=60)` in a parallel loop with retry/backoff.
 
 ### 2. REST API Query (USGS, Synoptic)
 
-Parameterized endpoints returning JSON or RDB format. Build URL query strings from CONFIG parameters. Parse response formats appropriately (RDB requires custom parsing).
+Key differentiator: parameterized queries returning JSON/RDB payloads.
+Usage: build params from `CONFIG`, call endpoint, then parse JSON or RDB.
 
 ### 3. Cloud Object Storage / S3 (CONUS404, HRRR, WRF-CMIP6)
 
-Access via `s3fs`, `boto3`, or library wrappers. Supports partial reads and lazy loading with `xarray.open_zarr()`. Use anonymous/unsigned credentials for public buckets.
+Key differentiator: object-store access with lazy reads and partial loading.
+Usage: open with `s3fs`/`boto3` + `xarray.open_zarr()` using anon/unsigned auth for public buckets.
 
 ### 4. Specialized Libraries (Herbie for HRRR, pyPRISMClimate, obspy for IRIS)
 
-Domain-specific wrappers that handle authentication, URL construction, and data parsing internally. Consult library documentation for parameter conventions.
+Key differentiator: source-specific clients that encapsulate URL/auth/parsing details.
+Usage: call the library API with CONFIG parameters, then normalize output into the standard pipeline.
 
 ## Spatial Subsetting Methods
 
