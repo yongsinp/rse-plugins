@@ -198,8 +198,7 @@ jobs:
       test-repo: ${{ github.repository_owner }}/rse-plugins-testcases
       test-branch: main
       test-dir: .testcases
-      # todo: revert
-      sleep-seconds: 0
+      sleep-seconds: 300
     secrets: inherit
 
   summarize:
