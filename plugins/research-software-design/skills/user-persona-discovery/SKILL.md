@@ -1,6 +1,6 @@
 ---
 name: user-persona-discovery
-description: Use when the user asks to brainstorm personas, define target users, create user profiles, or plan cultural probes for design research. Generates persona clusters, persona hypothesis cards (name, goal statement, behavioral summary, constraints, design implications), and probe design briefs through a structured conversational workflow. Produces living hypotheses grounded in observed evidence rather than invented demographics. Trigger phrases: "create personas", "define target users", "user profiles", "who are my users", "user research", "cultural probes", "research through design", "persona discovery".
+description: "Use when the user asks to brainstorm personas, define target users, create user profiles, or plan cultural probes for design research. Generates persona clusters, persona hypothesis cards (name, goal statement, behavioral summary, constraints, design implications), and probe design briefs through a structured conversational workflow. Produces living hypotheses grounded in observed evidence rather than invented demographics. Trigger phrases: create personas, define target users, user profiles, who are my users, user research, cultural probes, research through design, persona discovery."
 metadata:
   references:
     - references/user-persona-examples.md
