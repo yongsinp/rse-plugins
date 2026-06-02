@@ -41,6 +41,7 @@ timeout: 600         # use 600 for all cases including the negative-trigger case
 - Criteria must be **specific and verifiable** by a separate judge LLM.
   Good: "Uses @pytest.mark.parametrize decorator"
   Bad:  "Output follows best practices"
+- If a test case needs a file in the workspace, always include it as a `files:` entry with inline `content:` — never reference an external file path without content, as it will not exist at eval time.
 - Prompts must sound like a real developer wrote them, not like a test case.
 - The negative-trigger prompt should be plausibly related but clearly outside scope.
 - Files must be sequentially numbered starting at 001. The last file must be the negative-trigger case, named `NNN-negative-trigger.yaml`.
