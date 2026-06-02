@@ -14,114 +14,85 @@ metadata:
 
 Use this skill for complex software work that needs evidence before implementation.
 
-## Use When
-
-- The user asks for a structured investigation or technical research workflow.
-- The task sounds like a spike, proof of concept, feasibility study, or architecture investigation.
-- The user needs a plan with explicit success criteria before coding.
-- The user asks to validate implementation against a prior plan.
-
 ## What This Skill Produces
 
-- `research-<slug>.md`: existing patterns, architecture findings, risks, open questions.
-- `plan-<slug>.md`: phased implementation plan, automated/manual success criteria, out-of-scope list.
-- `experiment-<slug>.md`: approach comparisons with measured observations and recommendation.
-- `implement-<slug>.md`: execution log, phase status, deviations from plan.
-- validation report: criterion-by-criterion pass/fail with evidence and follow-up actions.
+All artifacts are written to `.agents/` in the project root:
 
-All workflow artifacts are written to `.agents/` in the project root.
+| Artifact | Sections |
+|----------|---------|
+| `research-<slug>.md` | Scope, findings (with file refs), risks, open questions |
+| `plan-<slug>.md` | Phases, success criteria (automated + manual), out-of-scope |
+| `experiment-<slug>.md` | Hypothesis, setup, observations, recommendation |
+| `implement-<slug>.md` | Per-phase progress, deviations, checks run |
+| `validation-<slug>.md` | Criterion-by-criterion pass/fail with evidence |
 
 ## Six-Phase Workflow
 
-1. **Research (`/research`)**
-   - Action: generate research questions, inspect code, document current behavior and constraints.
-   - Output: `.agents/research-<slug>.md`.
+1. **Research (`/research`)** — inspect code, document current behavior, list constraints.
+   → `.agents/research-<slug>.md`
 
-2. **Plan (`/plan`)**
-   - Action: create phased implementation plan with file-level scope and measurable criteria.
-   - Output: `.agents/plan-<slug>.md`.
+2. **Plan (`/plan`)** — create phased implementation plan with measurable criteria.
+   → `.agents/plan-<slug>.md`
 
-3. **Iterate Plan (`/iterate-plan`)**
-   - Action: update an existing plan based on feedback/new constraints while preserving consistency.
-   - Output: edited plan document.
+3. **Iterate Plan (`/iterate-plan`)** — update plan on new constraints; preserve consistency.
+   → edited plan document (in-place)
 
-4. **Experiment (`/experiment`, optional)**
-   - Action: run 2-3 alternatives and record evidence (not just theory).
-   - Output: `.agents/experiment-<slug>.md`.
+4. **Experiment (`/experiment`, optional)** — run 2-3 alternatives and record evidence.
+   → `.agents/experiment-<slug>.md`
 
-5. **Implement (`/implement`)**
-   - Action: execute plan phase-by-phase; record progress and deviations.
-   - Output: `.agents/implement-<slug>.md` plus code changes.
+5. **Implement (`/implement`)** — execute plan phase-by-phase; log deviations.
+   → `.agents/implement-<slug>.md` + code changes
 
-6. **Validate (`/validate`)**
-   - Action: verify each plan criterion with automated checks and explicit manual checks.
-   - Output: validation report tied to plan criteria.
+6. **Validate (`/validate`)** — check each criterion with automated + explicit manual checks.
+   → `.agents/validation-<slug>.md`
 
-## Command Examples
-
-Example slash command usage and expected artifacts:
+## Concrete Example
 
 ```text
 /research auth-system
--> .agents/research-auth-system.md
-   Sections: scope, findings with file refs, risks, open questions
+```
+Produces `.agents/research-auth-system.md` with content like:
 
-/plan auth-system
--> .agents/plan-auth-system.md
-   Sections: phases, success criteria (automated/manual), out-of-scope
+```markdown
+## Findings
+- `src/auth.py:L42` — JWT decode uses HS256 with a hardcoded secret; risk: key rotation impossible.
+- `src/middleware.py:L18` — Token expiry checked only in `auth_required`, not in API routes directly.
 
-/experiment jwt-vs-session
--> .agents/experiment-jwt-vs-session.md
-   Sections: hypothesis, setup, observations, recommendation
+## Risks
+- **HIGH** Secret rotation requires redeploy; tokens cannot be invalidated individually.
 
-/implement .agents/plan-auth-system.md
--> .agents/implement-auth-system.md
-   Sections: per-phase progress, deviations, checks run
+## Open Questions
+1. Does the existing auth middleware support scoped permissions?
+2. Which OAuth providers are in scope for initial rollout?
+```
 
-/validate .agents/plan-auth-system.md
--> validation report with pass/fail per criterion + evidence
+Then `/plan auth-system` produces `.agents/plan-auth-system.md`:
+
+```markdown
+## Phase 1: JWT Key Rotation
+**Success Criteria (Automated):** `pytest tests/test_auth.py::test_rotate_key` passes.
+**Success Criteria (Manual):** Old token rejected after rotation without service restart.
+
+## Out of Scope
+- Social OAuth login (deferred to Phase 2)
 ```
 
 ## Validation Checkpoints and Feedback Loop
 
-Use these checkpoints in sequence:
-
 1. **After Research:** confirm scope is complete and key unknowns are explicit.
 2. **After Plan:** confirm every phase has success criteria and verification steps.
-3. **After Experiment (if used):** choose one approach and update plan accordingly.
-4. **During Implement:** after each phase, run listed automated checks; if fail, fix or update plan with rationale.
-5. **Final Validate:** report pass/fail for each criterion and list remaining manual checks.
+3. **After Experiment (if used):** choose one approach; update plan accordingly.
+4. **During Implement:** after each phase, run listed automated checks. If fail → fix or update plan with rationale.
+5. **Final Validate:** report pass/fail per criterion with evidence.
 
-If validation fails, do not continue silently: return to **Iterate Plan** or **Implement** and re-run validation.
-
-## Data and Naming Conventions
-
-- `research-<slug>.md`
-- `plan-<slug>.md`
-- `experiment-<slug>.md`
-- `implement-<slug>.md`
-
-Slug format: lowercase, hyphenated from the command topic.
-
-Cross-reference prior docs in each artifact's `## References` section.
+**If validation fails:** return to **Iterate Plan** or **Implement** and re-run validation. Do not continue silently.
 
 ## Template Assets
 
 Templates are in `${CLAUDE_PLUGIN_ROOT}/skills/research-workflow-management/assets/`:
 
-- `research-template.md`
-- `plan-template.md`
-- `experiment-template.md`
-- `implement-template.md`
-- `handoff-template.md`
-
-Use templates to keep phase outputs concise, comparable, and auditable.
-
-## Quick Selection Guide
-
-- Need to understand existing code first -> **Research**
-- Need executable implementation strategy -> **Plan**
-- Need to revise approved plan -> **Iterate Plan**
-- Need evidence between competing approaches -> **Experiment**
-- Ready to execute approved plan -> **Implement**
-- Need acceptance decision against criteria -> **Validate**
+- `research-template.md` — scope, findings, risks, open questions
+- `plan-template.md` — phases, criteria, out-of-scope
+- `experiment-template.md` — hypothesis, observations, recommendation
+- `implement-template.md` — phase log, deviations, checks
+- `handoff-template.md` — summary for handoff to another agent or person
