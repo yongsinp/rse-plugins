@@ -9,20 +9,18 @@ metadata:
 
 # User Persona Discovery
 
-Generate evidence-grounded persona hypotheses through a structured conversation. Personas produced by this skill are behavioral archetypes — not demographic stereotypes — formatted as actionable design artifacts.
+Generate evidence-grounded persona hypotheses through a structured conversation.
+
+**Constraints:** Never cluster by demographics unless they directly cause behavioral differences. Never assign persona names before clustering. Never advance a phase without confirming the checkpoint.
 
 ## Resources
 
 | File | Contents |
 |------|----------|
-| `references/user-persona-examples.md` | 20 filled-in example personas covering common research software archetypes, ready to use as starting points or templates |
-| `references/persona-design-principles.md` | Core principles for evidence-based, goal-oriented, behavior-centered persona design |
-
----
+| `references/user-persona-examples.md` | 20 filled-in personas covering common research software archetypes |
+| `references/persona-design-principles.md` | Core principles for evidence-based, behavior-centered persona design |
 
 ## Persona Output Format
-
-Every persona produced by this skill follows this structure:
 
 ```
 **Name:** [Functional label, e.g. "The Batch Job Runner"]
@@ -34,9 +32,21 @@ Every persona produced by this skill follows this structure:
 **Confidence:** [High / Medium / Exploratory] — based on evidence quality
 ```
 
-See `references/user-persona-examples.md` for 20 fully worked examples.
+### Worked Example
 
----
+```
+**Name:** The Reproducibility Advocate
+**Goal:** Ensure every analysis result can be independently verified months later
+**Behaviors:**
+- Pins every dependency version explicitly
+- Runs analyses twice with different seeds before reporting
+- Documents environment setup in exhaustive detail
+- Treats "it works on my machine" as a failure condition
+**Constraints:** Works in a team that moves fast and resists documentation overhead
+**Tension:** Rigor vs. team velocity — they slow down the workflow to protect correctness
+**Design implications:** The tool must make reproducible runs the default, not an opt-in. Version pinning should be automatic. Audit logs cannot be optional.
+**Confidence:** High — grounded in 6 interviews; all described the same friction
+```
 
 ## Conversational Workflow
 
@@ -60,7 +70,7 @@ Run phases in order. Each phase ends with a checkpoint — confirm before advanc
 - What user interactions, data, interviews, or observations are you drawing from?
 - What surprised you? What felt inconsistent?
 
-**Rules:** No interpretations, no persona names, no solutions yet — observations only.
+**Rule:** Observations only at this stage — no interpretations, no persona names, no solutions.
 
 **Output:** A raw list of observed behaviors, expressed goals, constraints, and tensions.
 
@@ -70,13 +80,13 @@ Run phases in order. Each phase ends with a checkpoint — confirm before advanc
 
 ### Phase 3: Cluster Patterns
 
-Group observations by behavior and goal, ignoring demographics unless they directly affect behavior.
+Group observations by behavior and goal.
 
 **Ask:** If we designed specifically for this cluster, what would change?
 
 **Output:** 2–4 candidate clusters, each with: core goal · dominant behaviors · primary constraints.
 
-**Checkpoint:** Confirm clusters are meaningfully distinct before drafting personas. If clusters overlap, merge or split before proceeding.
+**Checkpoint:** Confirm clusters are meaningfully distinct. If clusters overlap, merge or split before proceeding.
 
 ---
 
@@ -90,7 +100,7 @@ For each cluster, collaboratively answer:
 
 **Output:** One persona card per cluster using the format above. Assign a confidence level.
 
-**Checkpoint:** Review each persona card — does it feel *inevitable* given its constraints? If a card contains contradictions that aren't explained by competing incentives, revise before continuing.
+**Checkpoint:** Does each card feel inevitable given its constraints? If a card contains contradictions not explained by competing incentives, revise before continuing.
 
 ---
 
@@ -104,16 +114,16 @@ Run 2–3 realistic use scenarios per persona:
 
 **Output:** Annotated scenario walkthroughs with friction points identified.
 
-**Checkpoint:** Any persona that survives all scenarios without forcing a design change should be discarded.
+**Checkpoint:** Discard any persona that survives all scenarios without forcing a design change.
 
 ---
 
 ### Phase 6: Make Assumptions Explicit
 
-For each surviving persona, identify:
-- Evidence sources used
-- Weak or missing data
-- Assumptions carried forward
+For each surviving persona:
+- List evidence sources used
+- Flag weak or missing data
+- Name assumptions carried forward
 
 Assign or revise confidence labels (High / Medium / Exploratory).
 
