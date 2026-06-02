@@ -31,7 +31,7 @@ criteria:
   - <Specific, verifiable assertion about the response>
   - <Another specific assertion>
 expect_skill: true   # false for the negative-trigger case
-timeout: 600         # use 30 for the negative-trigger case
+timeout: 600         # use 600 for all cases including the negative-trigger case
 ```
 
 ## Rules
